@@ -25,8 +25,8 @@ This repository contains the R code (**src/**) required for reproducing the resu
 
 ## Example outputs
 
-Visualization of connectivity status for individual stream scores.
 ![GitHub Logo](/examples/example-watershed.png)
+Figure 1 - The connectivity status for each stream segment within a watershed and the location of all barriers (black dots).
 
-Visualization of connectivity status aggregate by watershed.
 ![GitHub Logo](/examples/example-connectivity.png)
+Figure 1 - The 2010 connectivity status of all HUC 8 watersheds within Alberta.
