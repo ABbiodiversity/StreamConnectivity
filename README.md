@@ -16,7 +16,7 @@ For this indicator, we chose to use the Connectivity Status Index proposed by Di
 
 ## Repository Contents
 
-This repository contains the R code (**src/**) required for reproducing the results presented on GeoDiscover Alberta (https://geodiscover.alberta.ca/geoportal/rest/metadata/item/7025fe90840a4680b4011b7100c21644/html). This geospatial product presents the connectivity status of all HUC 8 watersheds in Alberta at four timesteps: 2010, 2014, 2016, and 2018. For any questions regarding the scripts presented in this repository, technical documentation, or about other applications of this indicator, please contact Brandon Allen (ABMI Applied Ecologist) at ballen@ualberta 
+This repository contains the R code (**src/**) required for reproducing the results presented on GeoDiscover Alberta (https://geodiscover.alberta.ca/geoportal/rest/metadata/item/7025fe90840a4680b4011b7100c21644/html). The Stream Connectivity Indicator for Alberta is a geospatial product that presents the connectivity status of all HUC 8 watersheds in Alberta at four timesteps: 2010, 2014, 2016, and 2018. The base GIS layers used to calculate this indicator are not available due to their size and sensitivity. For those who are interested, we have created a technical document describing the methodology of this indicator (LINK). For any questions regarding the scripts presented in this repository, GeoDiscover product, technical documentation, or about other applications of this indicator, please contact Brandon Allen (ABMI Applied Ecologist) at ballen@ualberta. 
 
 ## Literature cited
 
