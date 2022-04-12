@@ -1,7 +1,7 @@
 #
 # Title: Calculating stream connectivity status
 # Created: September 1st, 2021
-# Last Updated: JSeptember 1st, 2021
+# Last Updated: September 1st, 2021
 # Author: Brandon Allen
 # Objectives: Calculating lotic connectivity for individual streams and watersheds
 # Keywords: Notes, Environment initialization, Stream connectivity, Watershed connectivity
