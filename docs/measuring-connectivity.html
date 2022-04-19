@@ -189,17 +189,25 @@ div.csl-indent {
 <p>For those interested in the details of the connectivity status model, we recommend you read the original paper created by <span class="citation">Diebel et al. (<a href="#ref-Diebel2014" role="doc-biblioref">2014</a>)</span>. The main components of the index are defined as follows:</p>
 <center>
 <ol style="list-style-type: decimal">
-<li><p>Connectivity between segments <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span> under reference condition (no artificial barriers)
-<span class="math inline">\(A_{jt} = \sum_{i=1}^n(S_i \times \theta_{it} \times Q_{it} \times P_{ij}^{Nat} \times D_{ij})\)</span></p></li>
-<li><p>Connectivity between segments <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span> under current conditions (artificial barriers present)
-<span class="math inline">\(A_{jt}^B = \sum_{i=1}^n(S_i \times \theta_{it} \times Q_{it} \times P_{ij}^{Nat} \times P_{ij}^{Art} \times D_{ij})\)</span></p></li>
-<li><p>Inverse distance weighting function between segments <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span>
-<span class="math inline">\(D_{ij} = \frac{1}{1 + \frac{d_{ij}}{d_0}^2}\)</span></p></li>
-<li><p>Overall connectivity of segment <span class="math inline">\(j\)</span>
-<span class="math inline">\(C_j = \frac{\sum_{i=1, A_{jt}^B &gt;0}^n (\frac{A_{jt}}{A_{jt}^B})}{m_j}\)</span></p></li>
-<li><p>Length-weighted average connectivity using all stream segments within a network.
-<span class="math inline">\(\overline{C} = \frac{\sum_{j=1}^n (S_j \times Q_j \times C_j)}{\sum_{j=1}^n (S_j \times Q_j^\prime)}\)</span></p></li>
+<li>Connectivity between segments <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span> under reference condition (no artificial barriers)</li>
 </ol>
+<p><span class="math inline">\(A_{jt} = \sum_{i=1}^n(S_i \times \theta_{it} \times Q_{it} \times P_{ij}^{Nat} \times D_{ij})\)</span></p>
+<ol start="2" style="list-style-type: decimal">
+<li>Connectivity between segments <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span> under current conditions (artificial barriers present)</li>
+</ol>
+<p><span class="math inline">\(A_{jt}^B = \sum_{i=1}^n(S_i \times \theta_{it} \times Q_{it} \times P_{ij}^{Nat} \times P_{ij}^{Art} \times D_{ij})\)</span></p>
+<ol start="3" style="list-style-type: decimal">
+<li>Inverse distance weighting function between segments <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span></li>
+</ol>
+<p><span class="math inline">\(D_{ij} = \frac{1}{1 + \frac{d_{ij}}{d_0}^2}\)</span></p>
+<ol start="4" style="list-style-type: decimal">
+<li>Overall connectivity of segment <span class="math inline">\(j\)</span></li>
+</ol>
+<p><span class="math inline">\(C_j = \frac{\sum_{i=1, A_{jt}^B &gt;0}^n (\frac{A_{jt}}{A_{jt}^B})}{m_j}\)</span></p>
+<ol start="5" style="list-style-type: decimal">
+<li>Length-weighted average connectivity using all stream segments within a network.</li>
+</ol>
+<p><span class="math inline">\(\overline{C} = \frac{\sum_{j=1}^n (S_j \times Q_j \times C_j)}{\sum_{j=1}^n (S_j \times Q_j^\prime)}\)</span></p>
 </center>
 <p>Table 1. Definitions for variables included in the index. <span class="math inline">\(Q_{it}\)</span> and <span class="math inline">\(P_{ij}^{Nat}\)</span> are assumed to be 1 as we don’t have information on stream quality or occurrence of natural barriers at a provincial scale.</p>
 <table>
