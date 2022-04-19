@@ -12,7 +12,7 @@ The Alberta Environment and Parks (AEP), in partnership with the Alberta Biodive
 - Can be implemented at multiple spatial scales.
 - Cost effective in monitoring and reporting.
 
-For this indicator, we chose to use the Connectivity Status Index proposed by Diebel et al. (2014). This is a biological indicator developed to identify patterns of functional connectivity on the landscape. This index provides us with the flexibility to include measures such as habitat type, quality, and species dispersal limitations, while also incorporating variable resistance values to each barrier on the stream network
+For this indicator, we chose to use the Connectivity Status Index proposed by Diebel et al. (2014). This is a biological indicator developed to identify patterns of functional connectivity on the landscape. This index provides us with the flexibility to include measures such as habitat type, quality, and species dispersal limitations, while also incorporating variable resistance values to each barrier on the stream network.
 
 ## Repository Contents
 
