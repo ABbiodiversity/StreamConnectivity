@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+<head>
+
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>5 Applications | Development of the Stream Connectivity Indicator for Alberta</title>
+  <meta name="description" content="Supporting technical documentation for the stream connectivity indicator." />
+  <meta name="generator" content="bookdown 0.24 and GitBook 2.6.7" />
+
+  <meta property="og:title" content="5 Applications | Development of the Stream Connectivity Indicator for Alberta" />
+  <meta property="og:type" content="book" />
+  
+  
+  <meta property="og:description" content="Supporting technical documentation for the stream connectivity indicator." />
+  
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="5 Applications | Development of the Stream Connectivity Indicator for Alberta" />
+  
+  <meta name="twitter:description" content="Supporting technical documentation for the stream connectivity indicator." />
+  
+
+<meta name="author" content="Brandon Allen" />
+
+
+<meta name="date" content="2022-04-14" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  
+  
+<link rel="prev" href="interpreting-regional-connectivity.html"/>
+<link rel="next" href="literature.html"/>
+<script src="libs/header-attrs-2.12/header-attrs.js"></script>
+<script src="libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@6.4.6/dist/fuse.min.js"></script>
+<link href="libs/gitbook-2.6.7/css/style.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-table.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-bookdown.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-highlight.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-search.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-fontsettings.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-clipboard.css" rel="stylesheet" />
+
+
+
+
+
+
+
+
+<link href="libs/anchor-sections-1.1.0/anchor-sections.css" rel="stylesheet" />
+<link href="libs/anchor-sections-1.1.0/anchor-sections-hash.css" rel="stylesheet" />
+<script src="libs/anchor-sections-1.1.0/anchor-sections.js"></script>
+
+
+
+<style type="text/css">
+/* Used with Pandoc 2.11+ new --citeproc when CSL is used */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}
+</style>
+
+<link rel="stylesheet" href="style.css" type="text/css" />
+</head>
+
+<body>
+
+
+
+  <div class="book without-animation with-summary font-size-2 font-family-1" data-basepath=".">
+
+    <div class="book-summary">
+      <nav role="navigation">
+
+<ul class="summary">
+<li><a href="./">Stream Connectivity</a></li>
+
+<li class="divider"></li>
+<li class="chapter" data-level="1" data-path="index.html"><a href="index.html"><i class="fa fa-check"></i><b>1</b> Summary<span></span></a>
+<ul>
+<li class="chapter" data-level="1.1" data-path="index.html"><a href="index.html#acknowledgement"><i class="fa fa-check"></i><b>1.1</b> Acknowledgement<span></span></a></li>
+<li class="chapter" data-level="1.2" data-path="index.html"><a href="index.html#suggested-citation"><i class="fa fa-check"></i><b>1.2</b> Suggested citation<span></span></a></li>
+<li class="chapter" data-level="1.3" data-path="index.html"><a href="index.html#contact"><i class="fa fa-check"></i><b>1.3</b> Contact<span></span></a></li>
+</ul></li>
+<li class="chapter" data-level="2" data-path="introduction.html"><a href="introduction.html"><i class="fa fa-check"></i><b>2</b> Introduction<span></span></a>
+<ul>
+<li class="chapter" data-level="2.1" data-path="introduction.html"><a href="introduction.html#what-is-connectivity"><i class="fa fa-check"></i><b>2.1</b> What is connectivity?<span></span></a></li>
+<li class="chapter" data-level="2.2" data-path="introduction.html"><a href="introduction.html#how-can-it-be-measured"><i class="fa fa-check"></i><b>2.2</b> How can it be measured?<span></span></a></li>
+</ul></li>
+<li class="chapter" data-level="3" data-path="measuring-connectivity.html"><a href="measuring-connectivity.html"><i class="fa fa-check"></i><b>3</b> Measuring connectivity<span></span></a>
+<ul>
+<li class="chapter" data-level="3.1" data-path="measuring-connectivity.html"><a href="measuring-connectivity.html#background"><i class="fa fa-check"></i><b>3.1</b> Background<span></span></a></li>
+<li class="chapter" data-level="3.2" data-path="measuring-connectivity.html"><a href="measuring-connectivity.html#identifying-potential-barriers"><i class="fa fa-check"></i><b>3.2</b> Identifying potential barriers<span></span></a></li>
+<li class="chapter" data-level="3.3" data-path="measuring-connectivity.html"><a href="measuring-connectivity.html#culvert-passability-model"><i class="fa fa-check"></i><b>3.3</b> Culvert passability model<span></span></a></li>
+<li class="chapter" data-level="3.4" data-path="measuring-connectivity.html"><a href="measuring-connectivity.html#stream-connectivity-index"><i class="fa fa-check"></i><b>3.4</b> Stream Connectivity Index<span></span></a></li>
+<li class="chapter" data-level="3.5" data-path="measuring-connectivity.html"><a href="measuring-connectivity.html#dispersal-distances"><i class="fa fa-check"></i><b>3.5</b> Dispersal Distances<span></span></a></li>
+<li class="chapter" data-level="3.6" data-path="measuring-connectivity.html"><a href="measuring-connectivity.html#limitations"><i class="fa fa-check"></i><b>3.6</b> Limitations<span></span></a></li>
+</ul></li>
+<li class="chapter" data-level="4" data-path="interpreting-regional-connectivity.html"><a href="interpreting-regional-connectivity.html"><i class="fa fa-check"></i><b>4</b> Interpreting Regional Connectivity<span></span></a></li>
+<li class="chapter" data-level="5" data-path="applications.html"><a href="applications.html"><i class="fa fa-check"></i><b>5</b> Applications<span></span></a>
+<ul>
+<li class="chapter" data-level="5.1" data-path="applications.html"><a href="applications.html#culvert-resistance-potential"><i class="fa fa-check"></i><b>5.1</b> Culvert resistance potential<span></span></a></li>
+<li class="chapter" data-level="5.2" data-path="applications.html"><a href="applications.html#culvert-prioritization"><i class="fa fa-check"></i><b>5.2</b> Culvert prioritization<span></span></a></li>
+<li class="chapter" data-level="5.3" data-path="applications.html"><a href="applications.html#subregional-studies"><i class="fa fa-check"></i><b>5.3</b> Subregional studies<span></span></a></li>
+</ul></li>
+<li class="chapter" data-level="6" data-path="literature.html"><a href="literature.html"><i class="fa fa-check"></i><b>6</b> Literature<span></span></a></li>
+<li class="divider"></li>
+<li><a href="https://github.com/ABbiodiversity" target="blank">Published by ABMI</a></li>
+
+</ul>
+
+      </nav>
+    </div>
+
+    <div class="book-body">
+      <div class="body-inner">
+        <div class="book-header" role="navigation">
+          <h1>
+            <i class="fa fa-circle-o-notch fa-spin"></i><a href="./">Development of the Stream Connectivity Indicator for Alberta</a>
+          </h1>
+        </div>
+
+        <div class="page-wrapper" tabindex="-1" role="main">
+          <div class="page-inner">
+
+            <section class="normal" id="section-">
+<div id="applications" class="section level1 hasAnchor" number="5">
+<h1><span class="header-section-number">5</span> Applications<a href="applications.html#applications" class="anchor-section" aria-label="Anchor link to header"></a></h1>
+<p>We have highlighted three applications, based on the framework of the stream connectivity indicator, that can provide supplementary information to decision makers.</p>
+<div id="culvert-resistance-potential" class="section level2 hasAnchor" number="5.1">
+<h2><span class="header-section-number">5.1</span> Culvert resistance potential<a href="applications.html#culvert-resistance-potential" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>The Culvert Resistance Potential (CRP) metric is a decision support tool aimed to help users identify culverts that can have a disproportionately large impact on the stream connectivity indicator. The CRP metric is based on the same methodology as the the stream connectivity indicator <span class="citation">Diebel et al. (<a href="#ref-Diebel2014" role="doc-biblioref">2014</a>)</span> and is calculated as the change in stream connectivity (SC) between when a focal culvert is completely blocked (<span class="math inline">\(SC_{b}\)</span>) or passable (<span class="math inline">\(SC_{p}\)</span>).</p>
+<center>
+<p><span class="math inline">\(SC_{p} - SC_{b} = CRP\)</span></p>
+</center>
+<p>The CRP metric is dependent on four properties: 1) The location of the culvert within the stream network; 2) The types and amounts of surrounding habitat (Strahler order, stream length); 3) The scale of analysis (e.g., HUC-2 vs. HUC-6) as it impacts a culverts relative position within the stream network; and 4) the current degree of fragmentation (current SC) within the stream network. The resistance potential metric can be used to prioritize surveys at locations which are predicted to have the largest impacts on stream connectivity if they become blocked and inform how often revisits should occur.</p>
+</div>
+<div id="culvert-prioritization" class="section level2 hasAnchor" number="5.2">
+<h2><span class="header-section-number">5.2</span> Culvert prioritization<a href="applications.html#culvert-prioritization" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>Until a complete inventory of stream crossings is available throughout Alberta, we can use the culvert passability model to identify predicted road-stream intersections that are currently at high risk of being, or becoming, hanging. This information can be used to direct surveys to locations where we suspect hanging culverts to be occurring. All predictions from the model are masked based on the criteria identified in Culvert Passability Model subsection.</p>
+</div>
+<div id="subregional-studies" class="section level2 hasAnchor" number="5.3">
+<h2><span class="header-section-number">5.3</span> Subregional studies<a href="applications.html#subregional-studies" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>This indicator was develop with the intent to be regional in scope. However, this indicator can be calculated at smaller spatial scales (e.g., HUC-8), incorporate measures of habitat quality (e.g., sedimentation, water temperature), and species specific dispersal distances (e.g., Westslope Cutthroat Trout, Athabasca Rainbow Trout, Bull Trout). In collaboration with the Watercourse Crossing Program, we have developed a subregional case study to help inform culvert reclamation priorities in the Berland, Wildhay, and Swan River watersheds. Detailed maps of the stream network can be created to help identify stream segments that have low connectivity, providing another tool to help identify and prioritize restoration efforts within the watershed.</p>
+<center>
+<div class="figure">
+<img src="StreamConnectivity_files/figure-html/figures/SwanRvr-watershed_2021-06-24.png" style="width:80.0%" alt="" />
+<p class="caption">The stream connectivity (red = 0, blue = 1) of each stream segment and location of road-stream intersections (black dots) within the Swan River watershed.</p>
+</div>
+</center>
+
+</div>
+</div>
+<h3> Literature<a href="literature.html#literature" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<div id="refs" class="references csl-bib-body hanging-indent">
+<div id="ref-Diebel2014" class="csl-entry">
+Diebel, M. W., M. Fedora, S. Godswell, and J. R. O’Hanley. 2014. <span>“<span class="nocase">Effects of road crossings on habitat connectivity for stream-resident fish.</span>”</span> <em>River Research and Applications</em> 31: 1251–61. <a href="https://doi.org/10.1002/rra.2822">https://doi.org/10.1002/rra.2822</a>.
+</div>
+</div>
+            </section>
+
+          </div>
+        </div>
+      </div>
+<a href="interpreting-regional-connectivity.html" class="navigation navigation-prev " aria-label="Previous page"><i class="fa fa-angle-left"></i></a>
+<a href="literature.html" class="navigation navigation-next " aria-label="Next page"><i class="fa fa-angle-right"></i></a>
+    </div>
+  </div>
+<script src="libs/gitbook-2.6.7/js/app.min.js"></script>
+<script src="libs/gitbook-2.6.7/js/clipboard.min.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-search.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-sharing.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-fontsettings.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-bookdown.js"></script>
+<script src="libs/gitbook-2.6.7/js/jquery.highlight.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-clipboard.js"></script>
+<script>
+gitbook.require(["gitbook"], function(gitbook) {
+gitbook.start({
+"sharing": {
+"github": false,
+"facebook": true,
+"twitter": true,
+"linkedin": false,
+"weibo": false,
+"instapaper": false,
+"vk": false,
+"whatsapp": false,
+"all": ["facebook", "twitter", "linkedin", "weibo", "instapaper"]
+},
+"fontsettings": {
+"theme": "white",
+"family": "sans",
+"size": 2
+},
+"edit": {
+"link": null,
+"text": null
+},
+"history": {
+"link": null,
+"text": null
+},
+"view": {
+"link": null,
+"text": null
+},
+"download": null,
+"search": {
+"engine": "fuse",
+"options": null
+},
+"toc": {
+"collapse": "subsection"
+}
+});
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    var src = "true";
+    if (src === "" || src === "true") src = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML";
+    if (location.protocol !== "file:")
+      if (/^https?:/.test(src))
+        src = src.replace(/^https?:/, '');
+    script.src = src;
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+</body>
+
+</html>
