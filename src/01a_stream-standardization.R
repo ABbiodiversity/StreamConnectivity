@@ -1,10 +1,10 @@
 #
 # Title: Stream standardization procedure
 # Created: September 1st, 2021
-# Last Updated: September 1st, 2021
+# Last Updated: March 29th, 2023
 # Author: Brandon Allen
 # Objectives: Standardization of the implemented stream network
-# Keywords: Notes, Stream Network
+# Keywords: Notes, Stream Network Standardization
 #
 
 #########
@@ -13,19 +13,34 @@
 #
 # 1) All paths defined in this script are local
 #
-##################
-# Stream Network #
-##################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##################################
+# Stream Network Standardization #
+##################################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Clear memory
 rm(list=ls())
 gc()
 
+# Load libraries
+library(reticulate)
+
 # Source data cleaning scripts
-source("src/data-cleaning-functions.R")
+source("src/data-cleaning_functions.R")
+
+# Initialize reticulate to communicate with ArcPro
+py_discover_config() # We need version 3.7
+py_config() # Double check it is version 3.7
+
+# Set python version
+use_python(python = "C:/Users/ballen/miniconda3/envs/r-reticulate/python.exe")
+
+# Load arcpy
+arcpy <- import('arcpy') 
+
+# Define parallel processing factor
+arcpy$env$parallelProcessingFactor <- "100%"
 
 # Create a list of the stream layers that are included in the current analysis region.
-
 stream.layer.list <- list(column_id = list(SSO0 = c("FID", "Shape", "Environm_4", "Shape_STLe", "Environ_16"),
                                            SSO1 = c("FID", "Shape", "Environm_4", "Shape_STLe", "Environ_16"),
                                            SSO2 = c("FID", "Shape", "Environm_4", "Shape_STLe", "Environ_16"),
@@ -71,11 +86,11 @@ stream.layer.list <- list(column_id = list(SSO0 = c("FID", "Shape", "Environm_4"
                                               SSO20 = "data/base/gis/strahler_stream_order/archydro2/SSO20.shp"))
 
 # Run the stream standardization if the stream layer has not already been created
-
 if(!file.exists("data/base/gis/strahler_stream_order/cleaned-network/stream_network_merged.shp")) {
         
         stream_standardization(stream.list = stream.layer.list, 
-                               workspace = "data/base/gis/strahler_stream_order/")
+                               workspace = "data/base/gis/strahler_stream_order/",
+                               arcpy = arcpy)
         
 }
 
