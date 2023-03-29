@@ -4,9 +4,134 @@
 # Last Updated: September 1st, 2021
 # Author: Brandon Allen
 # Objectives: Functions required for extracting stream length, order, intersections (culverts) with the roads layer, and identification of intersections as bridges.
-# Keywords: Network extraction, Stream Standardization, Linear Feature subsetting, Stream Slope, Upstream Distance
+# Keywords: Stream Standardization, Network extraction, Linear Feature subsetting, Stream Slope, Upstream Distance
 # Note: 
 #
+
+##########################
+# Stream standardization # Creates a singular stream network for the province with standardized attributes
+##########################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+stream_standardization <- function(stream.list, workspace, arcpy) {
+                
+        #####################################
+        # Standardization of Stream Network #
+        #####################################
+        
+        for (unique.stream in names(stream.list$stream_layer)) {
+                
+                # Copy Strahler Stream Order layer, delete unnecessary fields
+                arcpy$Copy_management(in_data = stream.list$stream_layer[[unique.stream]], 
+                                      out_data = paste0(workspace, 
+                                                        "scratch/", 
+                                                        unique.stream, 
+                                                        ".shp"))
+                
+                # Identify fields within the layer to be removed
+                field.list <- arcpy$ListFields(dataset = paste0(workspace,
+                                                                "scratch/", 
+                                                                unique.stream, 
+                                                                ".shp"),
+                                               field_type = "All")
+                field.list <- unlist(lapply(field.list, function(x) x$name))
+                field.list <- field.list[!field.list %in% c("FID", "Shape")] # Excluding the FID and shape fields
+                
+                # Rename attributes that are to be maintained
+                sso.rename <- c("StrmType", "StrmLength", "Strahler")
+                sso.type <- c("TEXT", "Double", "Double")
+                
+                for(field.name in 1:3) {
+                        
+                        # Rename attribute table names for consistency
+                        arcpy$AddField_management(in_table = paste0(workspace, 
+                                                                    "scratch/", 
+                                                                    unique.stream, 
+                                                                    ".shp"),
+                                                  field_name = sso.rename[field.name], 
+                                                  field_type = sso.type[field.name])
+                        
+                        arcpy$CalculateField_management(in_table = paste0(workspace, 
+                                                                          "scratch/", 
+                                                                          unique.stream, 
+                                                                          ".shp"),
+                                                        field = sso.rename[field.name],
+                                                        expression = paste("!", stream.list$column_id[[unique.stream]][field.name + 2], "!", sep = ""),
+                                                        expression_type = "PYTHON")
+                        
+                }
+                
+                # Remove all remaining attributes
+                arcpy$DeleteField_management(in_table = paste0(workspace, "scratch/", unique.stream, ".shp"), 
+                                             drop_field = field.list)
+                
+        }
+        
+        # Create the merged layer
+        stream.layers <- list.files(paste0(workspace, "scratch/"), full.names = TRUE)
+        stream.layers <- stream.layers[grep(".shp", stream.layers)]
+        stream.layers <- stream.layers[-grep(".shp.xml", stream.layers)]
+        
+        arcpy$Merge_management(inputs = paste(stream.layers, collapse = ";"), 
+                               output = paste0(workspace,
+                                               "cleaned-network/stream_network_merged.shp"))
+        
+        # Remove all temporary files
+        do.call(file.remove, list(list.files(paste0(workspace, "scratch/"), full.names = TRUE)))
+                
+}
+
+#############################
+# Linear Feature subsetting # Creates subsets for the stream and road/rail linear features for user defined regions
+#############################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+linearfeature_subsetting <- function(watershed.layer, road.layer, rail.layer, stream.layer, hfi.year, watershed.lookup, huc.scale, arcpy) {
+        
+        # If the merged roadrail-centerlines exists for the HFI, skip.
+        if (!file.exists(paste0(getwd(), "/data/base/gis/roadrail-centerlines/", hfi.year, "/roadrail_centerlines_", hfi.year, ".shp"))) {
+                
+                arcpy$Merge_management(inputs = paste(road.layer, rail.layer, sep = ";"), 
+                                       output = paste0(getwd(), "/data/base/gis/roadrail-centerlines/", 
+                                                       hfi.year, "/roadrail_centerlines_", hfi.year, ".shp"))
+                
+        }
+        
+        # For each watershed in the lookup, create the appropriate stream and road/rail subsets
+        for (HUC in watershed.lookup) {
+                
+                # Create geodatabase
+                arcpy$CreateFileGDB_management(out_folder_path = paste0(getwd(), "/data/processed/huc-", 
+                                                                        huc.scale, "/", hfi.year, "/gis/"), 
+                                               out_name = paste0(HUC, ".gdb"))
+                
+                # Define workspace
+                arcpy$env$workspace <- paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
+                                              hfi.year, "/gis/", HUC, ".gdb")
+                
+                # Define the where clause for including watersheds
+                where.clause <- paste0("\"HUC_", huc.scale, "\" IN ('", HUC, "')")
+
+                # Create a watershed mask
+                arcpy$Select_analysis(in_features = paste0(getwd(), "/", watershed.layer),
+                                      out_feature_class = paste0("watershed_boundary"), 
+                                      where_clause = where.clause)
+                
+                # Clip the road and rail centerlines
+                arcpy$PairwiseClip_analysis(in_features = paste0(getwd(), "/data/base/gis/roadrail-centerlines/", 
+                                                                 hfi.year, 
+                                                                 "/roadrail_centerlines_", 
+                                                                 hfi.year, ".shp"), 
+                                            clip_features = "watershed_boundary", 
+                                            out_feature_class = "road_rail")
+                
+                # Clip the stream network
+                arcpy$PairwiseClip_analysis(in_features = paste0(getwd(), "/data/base/gis/", 
+                                                                 "strahler_stream_order/cleaned-network/stream_network_merged.shp"), 
+                                            clip_features = "watershed_boundary", 
+                                            out_feature_class = "stream_network")
+                
+        }
+        
+}
 
 ######################
 # Network extraction # Network extraction based on the new culvert passability model
@@ -893,135 +1018,6 @@ def autoIncrement():
   do.call(file.remove, list(list.files(paste0(relative.path, "temporary-shapefiles/"), full.names = TRUE)))
   
   return(list(node.data, edge.data.ref, node.reach, edge.reach))
-  
-}
-
-
-##########################
-# Stream standardization # Creates a singular stream network for the province with standardized attributes
-##########################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-stream_standardization <- function(stream.list, workspace) {
-  
-  require(foreign)
-  require(raster)
-  require(rgdal)
-  require(RPyGeo)
-  
-  # Define location of Python for ArcGIS processes
-  arcpy <- rpygeo_build_env(path = "C:/Python27/ArcGISx6410.4/",
-                            workspace = workspace, 
-                            x64 = TRUE, 
-                            overwrite = TRUE,
-                            extensions = c("Spatial", "GeoStats"))
-  
-  #####################################
-  # Standardization of Stream Network #
-  #####################################
-  
-  for (unique.stream in names(stream.list$stream_layer)) {
-    
-    # Copy Strahler Stream Order layer, delete unnecessary fields
-    arcpy$CopyFeatures_management(in_features = stream.list$stream_layer[[unique.stream]], 
-                                  out_feature_class = paste0("scratch/", unique.stream, ".shp"))
-    
-    # Identify fields within the layer to be removed
-    field.list <- arcpy$ListFields(dataset = paste0("scratch/", unique.stream, ".shp"),
-                                   field_type = "All")
-    field.list <- unlist(lapply(field.list, function(x) x$name))
-    field.list <- field.list[!field.list %in% c("FID", "Shape")] # Excluding the FID and shape fields
-    
-    # Rename attributes that are to be maintained
-    sso.rename <- c("StrmType", "StrmLength", "Strahler")
-    sso.type <- c("TEXT", "Double", "Double")
-    
-    for(field.name in 1:3) {
-      
-      # Rename attribute table names for consistency
-      arcpy$AddField_management(in_table = paste0("scratch/", unique.stream, ".shp"),
-                                field_name = sso.rename[field.name], 
-                                field_type = sso.type[field.name])
-      
-      arcpy$CalculateField_management(in_table = paste0("scratch/", unique.stream, ".shp"),
-                                      field = sso.rename[field.name],
-                                      expression = paste("!", stream.list$column_id[[unique.stream]][field.name + 2], "!", sep = ""),
-                                      expression_type = "PYTHON")
-      
-    }
-    
-    # Remove all remaining attributes
-    arcpy$DeleteField_management(in_table = paste0("scratch/", unique.stream, ".shp"), 
-                                 drop_field = field.list)
-    
-  }
-  
-  # Create the merged layer
-  stream.layers <- list.files(paste0(workspace, "scratch/"), full.names = TRUE)
-  stream.layers <- stream.layers[grep(".shp", stream.layers)]
-  stream.layers <- stream.layers[-grep(".shp.xml", stream.layers)]
-  
-  arcpy$Merge_management(inputs = paste(stream.layers, collapse = ";"), 
-                         output = "cleaned-network/stream_network_merged.shp")
-  
-  # Remove all temporary files
-  do.call(file.remove, list(list.files(paste0(workspace, "scratch/"), full.names = TRUE)))
-  rm(arcpy)
-  
-}
-
-#############################
-# Linear Feature subsetting # Creates subsets for the stream and road/rail linear features for user defined regions
-#############################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-linearfeature_subsetting <- function(watershed.layer, road.layer, rail.layer, stream.layer, hf.year, workspace, watershed.lookup, huc.scale) {
-  
-  require(rgdal)
-  require(RPyGeo)
-  require(raster)
-  require(foreign)
-  
-  # If the merged roadrail-centerlines exists for the HFI, skip.
-  if (!file.exists(paste0(workspace, "roadrail-centerlines/", hf.year, "/roadrail_centerlines_", hf.year, ".shp"))) {
-    
-    arcpy$Merge_management(inputs = paste(road.layer, rail.layer, sep = ";"), 
-                           output = paste("roadrail-centerlines/", hf.year, "/roadrail_centerlines_", hf.year, ".shp", sep = ""))
-
-  }
-  
-  # For each watershed in the lookup, create the appropriate stream and road/rail subsets
-
-  for (HUC in watershed.lookup) {
-    
-    where.clause <- paste0("\"HUC_", huc.scale, "\" IN ('", HUC, "')")
-    
-    # Create watershed mask if not found
-    if (!file.exists(paste0(workspace, "watersheds/huc-", huc.scale, "/", HUC, "_watershed.shp"))) {
-      
-      arcpy$Select_analysis(in_features = watershed.layer,
-                            out_feature_class = paste0("watersheds/huc-", huc.scale, "/", HUC, "_watershed.shp"), 
-                            where_clause = where.clause)
-      
-    }
-
-    # Subset centerlines based on the watershed mask if not found
-    if (!file.exists(paste0(workspace, "roadrail-centerlines/", hf.year, "/huc-", huc.scale, "/", HUC, "_roadrail.shp"))) {
-      
-      arcpy$Clip_analysis(in_features = paste0("roadrail-centerlines/", hf.year, "/roadrail_centerlines_", hf.year, ".shp"), 
-                          clip_features = paste0("watersheds/huc-", huc.scale, "/", HUC, "_watershed.shp"), 
-                          out_feature_class = paste0("roadrail-centerlines/", hf.year, "/huc-", huc.scale, "/", HUC, "_roadrail.shp"))
-      
-    }
-
-    # Subset stream network based on the watershed mask if not found
-    if (!file.exists(paste0(workspace, "strahler_stream_order/huc-", huc.scale, "/", HUC, "_stream.shp"))) {
-      
-      arcpy$Clip_analysis(in_features = "strahler_stream_order/cleaned-network/stream_network_merged.shp", 
-                          clip_features = paste0("watersheds/huc-", huc.scale, "/", HUC, "_watershed.shp"), 
-                          out_feature_class = paste0("strahler_stream_order/huc-", huc.scale, "/", HUC, "_stream.shp"))
-      
-    }
-    
-  }
   
 }
 
