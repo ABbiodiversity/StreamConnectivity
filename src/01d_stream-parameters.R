@@ -1,10 +1,10 @@
 #
 # Title: Calculating confluence bound slope, local stream slope, and upstream distance
 # Created: September 1st, 2021
-# Last Updated: September 1st, 2021
+# Last Updated: March 31st, 2023
 # Author: Brandon Allen
 # Objectives: Based on the network files that have been created, calculate the stream slopes and remove self intersecting points
-# Keywords: Notes, Network Corrections, Stream Slope, Upstream Distance 
+# Keywords: Notes, Stream Slope, Upstream Distance 
 #
 
 #########
@@ -13,24 +13,6 @@
 #
 # 1) All paths defined in this script are local
 #
-#######################
-# Network Corrections # 
-#######################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# Clear Memory
-rm(list=ls())
-gc()
-
-# There is a single culvert point that has an error in the network. Correct this node.
-reach.edge <- read.csv("data/processed/huc-6/2010/reach/170303-edge-reach.csv")
-
-reach.edge[reach.edge$Node == "1733-1732", c("UpstreamSeg", "DownstreamSeg")] <- 1732
-reach.edge[reach.edge$Node == "1733-1732", c("Node")] <- "1732-1732"
-
-write.csv(x = reach.edge,
-          file = "data/processed/huc-6/2010/reach/170303-edge-reach.csv",
-          row.names = FALSE)
-
 ################
 # Stream Slope #
 ################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -40,13 +22,11 @@ rm(list=ls())
 gc()
 
 # Source data cleaning scripts
-source("src/data-cleaning-functions.R")
+source("src/data-cleaning_functions.R")
 
 # Identify the set of watersheds which need to be formatted. Any culvert without edge information is assumed 100% connected
 watershed.path <- list.files(path = "data/processed/huc-6/2010/connectivity/", full.names = TRUE)
 watershed.name <- list.files(path = "data/processed/huc-6/2010/connectivity/", full.names = FALSE)
-
-watershed.name <- watershed.name[grep("edge", watershed.name)]
 
 for (watershed in watershed.name) {
         
@@ -54,9 +34,12 @@ for (watershed in watershed.name) {
         # Stream Confluence #
         #####################
         
+        # load the stream network data
+        load(watershed.path[grep(watershed, watershed.path)])
+        
         # Load appropriate node and edge data
-        confluence.edge <- read.csv(watershed.path[grep(watershed, watershed.path)])
-        confluence.node <- read.csv(gsub("edge", "node", watershed.path[grep(watershed, watershed.path)]))
+        confluence.edge <- watershed.network[["Edge"]]
+        confluence.node <- watershed.network[["Node"]]
         
         # If Upstream or Downstream segments == 0, make Upstream == Downstream
         confluence.edge$UpstreamSeg[confluence.edge$UpstreamSeg == 0] <- confluence.edge$DownstreamSeg[confluence.edge$UpstreamSeg == 0]
@@ -89,7 +72,7 @@ for (watershed in watershed.name) {
                 
         }
         
-        print(paste0(gsub("-edge-connectivity.csv", " Confluence estimate complete: ", watershed), Sys.time()))
+        print(paste0("Confluence estimate complete: ", watershed), Sys.time())
         
         rm(culvert.list, culvert.id)
         
@@ -109,7 +92,7 @@ for (watershed in watershed.name) {
                                                                                          confluence.node[confluence.node$Stream %in% confluence.edge[confluence.edge$TARGET_FID == edge.id, "DownstreamSeg"], "HabitatType"]))
         }
         
-        print(paste0(gsub("-edge-connectivity.csv", " Strahler assignment complete: ", watershed), Sys.time()))
+        print(paste0("Strahler assignment complete: ", watershed), Sys.time())
         
         # Identify stream segments associated with each HUC 8. There may be instances of segments running into both, but 
         # this sound be a small total length.
@@ -147,20 +130,13 @@ for (watershed in watershed.name) {
         confluence.edge$Compactness <- confluence.edge$WatershedPerm / (2 * sqrt(pi * confluence.edge$WatershedArea))
         confluence.edge$DrainageDensity <- confluence.edge$TotalLength / confluence.edge$WatershedArea
         
-        print(paste0(gsub("-edge-connectivity.csv", " Watershed characteristics complete: ", watershed), Sys.time()))
         
-        # Update file name and save
-        file.name <- watershed.path[grep(watershed, watershed.path)]
-        file.name <- gsub("/connectivity", "/predicted/stream", file.name)
-        file.name <- gsub("edge-connectivity.csv", "edge-connectivity-cleaned.csv", file.name)
+        print(paste0("Watershed characteristics complete: ", watershed), Sys.time())
         
-        write.csv(confluence.edge, 
-                  file = file.name,
-                  row.names = FALSE)
-        
-        write.csv(confluence.node, 
-                  file = gsub("edge", "node", file.name),
-                  row.names = FALSE)
+        # Update R object and save
+        watershed.network[["Edge_Cleaned"]] <- confluence.edge
+        watershed.network[["Node_Cleaned"]] <- confluence.node
+        save(watershed.network, file = watershed.path[grep(watershed, watershed.path)])
 
 }
 
@@ -177,19 +153,25 @@ library(foreign)
 library(igraph)
 
 # Source data cleaning scripts
-source("src/data-cleaning-functions.R")
-source("src/connectivity-status-functions.R")
+source("src/data-cleaning_functions.R")
+source("src/connectivity-status_functions.R")
 
-# Identify watersheds that need to be formated 
-edge.names <- list.files(path = "data/processed/huc-6/2010/predicted/stream/", full.names = TRUE)
-edge.names <- edge.names[grep("edge", edge.names)]
+# Identify the set of watersheds to calculate total upstream distance
+watershed.path <- list.files(path = "data/processed/huc-6/2010/connectivity/", full.names = TRUE)
+watershed.name <- list.files(path = "data/processed/huc-6/2010/connectivity/", full.names = FALSE)
 
-for (watershed in edge.names) {
+for (watershed in edge.nwatershed.nameames) {
         
-        # Load both the edge and node networks
-        edge.in <- read.csv(watershed)
-        node.file <- gsub("edge", "node", watershed)
-        node.in <- read.csv(node.file)
+        #####################
+        # Upstream Distance #
+        #####################
+        
+        # load the stream network data
+        load(watershed.path[grep(watershed, watershed.path)])
+        
+        # Load appropriate node and edge data
+        edge.in <- watershed.network[["Edge_Cleaned"]]
+        node.in <- watershed.network[["Node_Cleaned"]]
         
         # Create the list of culverts to get estimates for
         culvert.list <- edge.in[edge.in$Class == "Culvert", ]
@@ -218,12 +200,10 @@ for (watershed in edge.names) {
         # Remove all self intersecting end points
         edge.in <- edge.in[edge.in$UpstreamSeg != edge.in$DownstreamSeg, ]
         
-        # Save
-        write.csv(edge.in,
-                  file = watershed,
-                  row.names = FALSE)
+        # Update R object and save
+        watershed.network[["Edge_Cleaned"]] <- edge.in
+        save(watershed.network, file = watershed.path[grep(watershed, watershed.path)])
         
         print(watershed)
-        
         
 }
