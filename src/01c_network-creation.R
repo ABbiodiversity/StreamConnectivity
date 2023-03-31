@@ -1,7 +1,7 @@
 #
 # Title: Network creation and standardization
 # Created: September 1st, 2021
-# Last Updated: September 1st, 2021
+# Last Updated: March 29th, 2023
 # Author: Brandon Allen
 # Objectives: Create the network file required for calculating stream connectivity
 # Keywords: Notes, Network Creation
@@ -23,88 +23,72 @@ gc()
 
 # Load libraries
 library(foreign)
-library(raster)
-library(rgdal)
-library(RPyGeo)
+library(reticulate)
 
 # Source data cleaning scripts
-source("src/data-cleaning-functions.R")
+source("src/data-cleaning_functions.R")
+
+# Initialize reticulate to communicate with ArcPro
+py_discover_config() # We need version 3.7
+py_config() # Double check it is version 3.7
+
+# Set python version
+use_python(python = "C:/Users/ballen/miniconda3/envs/r-reticulate/python.exe")
+
+# Load arcpy
+arcpy <- import('arcpy') 
+
+# Define parallel processing factor
+arcpy$env$parallelProcessingFactor <- "100%"
 
 # Create the appropriate linear feature subsets using the three HUC scales of interest
 huc.scales <- c(6, 8, 10) # Define HUC scales
 hfi.years <- c(2010, 2014, 2016, 2018) # Define HFI years
 
-# Initialize the rpygeo environment outside of the function to prevent collapsing when looped
-arcpy <- rpygeo_build_env(path = "C:/Python27/ArcGISx6410.4/",
-                          workspace = "data/base/gis/scratch/", 
-                          x64 = TRUE, 
-                          overwrite = TRUE,
-                          extensions = c("Spatial", "GeoStats"))
-
 for (huc.unit in huc.scales) {
         
-        # Depending on the HUC unit, identify focal watersheds
-        
+        # Identify the watersheds within the focal HUC scale
         if(huc.unit == 6) {
                 
-                watershed.ids <- read.dbf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.dbf")
-                watershed.ids <- unique(as.character(watershed.ids$HUC_6))
+                huc.layer <- paste0("data/base/gis/watersheds/boundary/HUC_",
+                                    8,
+                                    "_EPSG3400.dbf")
+                watershed.ids <- read.dbf(huc.layer)
                 
+        } else {
+                
+                huc.layer <- paste0("data/base/gis/watersheds/boundary/HUC_",
+                                    huc.unit,
+                                    "_EPSG3400.dbf")
+                watershed.ids <- read.dbf(huc.layer)
         }
         
-        if(huc.unit == 8) {
-
-                watershed.ids <- read.dbf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.dbf")
-                watershed.ids <- unique(as.character(watershed.ids$HUC_8))
-                
-        }
+        watershed.ids <- unique(as.character(watershed.ids[, paste0("HUC_", huc.unit)]))
         
-        if(huc.unit == 10) {
+        # Create the required networks
+        # Loop through HFI inventories
+        for (hfi.year in hfi.years) {
                 
-                watershed.ids <- read.dbf("data/base/gis/watersheds/boundary/HUC_10_EPSG3400.dbf")
-                watershed.ids <- unique(as.character(watershed.ids$HUC_10))
-                
-        }
-        
-        # Network creation
-        
-        for (hfi in hfi.years) {
-                
-                # Create folder structure
-                
-                if(!file.exists(paste0("data/processed/huc-", huc.unit, "/", hfi, "/gis/", watershed.ids[1]))) {
-                        
-                        for(HUC in watershed.ids) {
-                                
-                                dir.create(paste0("data/processed/huc-", huc.unit, "/", hfi, "/gis/", HUC))
-                                dir.create(paste0("data/processed/huc-", huc.unit, "/", hfi, "/gis/", HUC, "/temporary-databases"))
-                                dir.create(paste0("data/processed/huc-", huc.unit, "/", hfi, "/gis/", HUC, "/temporary-shapefiles"))
-                                
-                        }
-                        
-                }
-                
+                # Loop through watersheds
                 for (HUC in watershed.ids) {
                         
-                        gis.summaries <- network_extraction(stream.layer = paste0("data/base/gis/strahler_stream_order/huc-", huc.unit, "/", HUC, "_stream.shp"),
-                                                                road.layer = paste0("data/base/gis/roadrail-centerlines/", hfi, "/huc-", huc.unit, "/", HUC, "_roadrail.shp"),
-                                                                dam.layer = "C:/Users/beallen/Desktop/Lotic-Connectivity/data/base/gis/dams/Alberta_Dams_3400_2021-05-11.shp", 
-                                                                HUC = HUC,
-                                                                mineable.boundary = "data/base/gis/minable/MINEABLE_OIL_SANDS_SCHEME_APPROVALS_MASTER_1.shp",
-                                                                relative.path = paste0("data/processed/huc-", huc.unit, "/", hfi, "/gis/", HUC, "/"))
+                        gis.summaries <- network_extraction(watershed.geodatabase = paste0(getwd(), "/data/processed/huc-", huc.unit, "/", 
+                                                                                           hfi.year, "/gis/", HUC, ".gdb"),
+                                                            HUC = HUC,
+                                                            dam.layer = paste0(getwd(), "/data/base/gis/dams/Alberta_Dams_3400_2021-05-11.shp"), 
+                                                            mineable.boundary = paste0(getwd(), "/data/base/gis/minable/MINEABLE_OIL_SANDS_SCHEME_APPROVALS_MASTER_1.shp"),
+                                                            Slope = paste0(getwd(), "/data/base/gis/topographic/Slope_LiDAR.tif"),
+                                                            DEM = paste0(getwd(), "/data/base/gis/topographic/GEE_srtm_mosaic/srtm.tif"), 
+                                                            MAP = paste0(getwd(), "/data/base/gis/climate/MAP.asc"), 
+                                                            Eref = paste0(getwd(), "/data/base/gis/climate/Eref.asc"),
+                                                            AT.bridges = paste0(getwd(), "/data/base/gis/bridges/alberta-transportation/Bridges-20m-3400_2019.shp"), 
+                                                            NP.rail.bridges = paste0(getwd(), "/data/base/gis/bridges/access-layer/railway-bridges-np-20m_2020.shp"),
+                                                            NP.road.bridges = paste0(getwd(), "/data/base/gis/bridges/access-layer/road-bridges-np-20m_2020.shp"),
+                                                            arcpy = arcpy)
                         
-                        if (length(gis.summaries) == 1) {
-                                
-                                write.csv(gis.summaries[1], file = paste0("data/processed/huc-", huc.unit, "/", hfi, "/connectivity/", HUC, "-node-connectivity.csv"), row.names = FALSE)
-                                
-                        } else {
-                                
-                                write.csv(gis.summaries[1], file = paste0("data/processed/huc-", huc.unit, "/", hfi, "/connectivity/", HUC, "-node-connectivity.csv"), row.names = FALSE)
-                                write.csv(gis.summaries[2], file = paste0("data/processed/huc-", huc.unit, "/", hfi, "/connectivity/", HUC, "-edge-connectivity.csv"), row.names = FALSE)
-                                write.csv(gis.summaries[3], file = paste0("data/processed/huc-", huc.unit, "/", hfi, "/reach/", HUC, "-node-reach.csv"), row.names = FALSE)
-                                write.csv(gis.summaries[4], file = paste0("data/processed/huc-", huc.unit, "/", hfi, "/reach/", HUC, "-edge-reach.csv"), row.names = FALSE)
-                                
-                        }
+                        save(gis.summaries, file = paste0("data/processed/huc-", huc.unit, 
+                                                          "/", hfi.year, "/connectivity/",
+                                                          "network_",  HUC, ".Rdata"))
                         
                         print(HUC)
                         
@@ -113,7 +97,5 @@ for (huc.unit in huc.scales) {
                 print(hfi)
                 
         }
-        
-
         
 }
