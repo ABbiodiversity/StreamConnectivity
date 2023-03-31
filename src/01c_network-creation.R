@@ -72,23 +72,23 @@ for (huc.unit in huc.scales) {
                 # Loop through watersheds
                 for (HUC in watershed.ids) {
                         
-                        gis.summaries <- network_extraction(watershed.geodatabase = paste0(getwd(), "/data/processed/huc-", huc.unit, "/", 
+                        watershed.network <- network_extraction(watershed.geodatabase = paste0(getwd(), "/data/processed/huc-", huc.unit, "/", 
                                                                                            hfi.year, "/gis/", HUC, ".gdb"),
-                                                            HUC = HUC,
-                                                            dam.layer = paste0(getwd(), "/data/base/gis/dams/Alberta_Dams_3400_2021-05-11.shp"), 
-                                                            mineable.boundary = paste0(getwd(), "/data/base/gis/minable/MINEABLE_OIL_SANDS_SCHEME_APPROVALS_MASTER_1.shp"),
-                                                            Slope = paste0(getwd(), "/data/base/gis/topographic/Slope_LiDAR.tif"),
-                                                            DEM = paste0(getwd(), "/data/base/gis/topographic/GEE_srtm_mosaic/srtm.tif"), 
-                                                            MAP = paste0(getwd(), "/data/base/gis/climate/MAP.asc"), 
-                                                            Eref = paste0(getwd(), "/data/base/gis/climate/Eref.asc"),
-                                                            AT.bridges = paste0(getwd(), "/data/base/gis/bridges/alberta-transportation/Bridges-20m-3400_2019.shp"), 
-                                                            NP.rail.bridges = paste0(getwd(), "/data/base/gis/bridges/access-layer/railway-bridges-np-20m_2020.shp"),
-                                                            NP.road.bridges = paste0(getwd(), "/data/base/gis/bridges/access-layer/road-bridges-np-20m_2020.shp"),
-                                                            arcpy = arcpy)
+                                                                HUC = HUC,
+                                                                dam.layer = paste0(getwd(), "/data/base/gis/dams/Alberta_Dams_3400_2021-05-11.shp"), 
+                                                                mineable.boundary = paste0(getwd(), "/data/base/gis/minable/MINEABLE_OIL_SANDS_SCHEME_APPROVALS_MASTER_1.shp"),
+                                                                Slope = paste0(getwd(), "/data/base/gis/topographic/Slope_LiDAR.tif"),
+                                                                DEM = paste0(getwd(), "/data/base/gis/topographic/GEE_srtm_mosaic/srtm.tif"), 
+                                                                MAP = paste0(getwd(), "/data/base/gis/climate/MAP.asc"), 
+                                                                Eref = paste0(getwd(), "/data/base/gis/climate/Eref.asc"),
+                                                                AT.bridges = paste0(getwd(), "/data/base/gis/bridges/alberta-transportation/Bridges-20m-3400_2019.shp"), 
+                                                                NP.rail.bridges = paste0(getwd(), "/data/base/gis/bridges/access-layer/railway-bridges-np-20m_2020.shp"),
+                                                                NP.road.bridges = paste0(getwd(), "/data/base/gis/bridges/access-layer/road-bridges-np-20m_2020.shp"),
+                                                                arcpy = arcpy)
                         
-                        save(gis.summaries, file = paste0("data/processed/huc-", huc.unit, 
-                                                          "/", hfi.year, "/connectivity/",
-                                                          "network_",  HUC, ".Rdata"))
+                        save(watershed.network, file = paste0("data/processed/huc-", huc.unit, 
+                                                              "/", hfi.year, "/connectivity/",
+                                                              "network_",  HUC, ".Rdata"))
                         
                         print(HUC)
                         
