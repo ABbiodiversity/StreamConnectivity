@@ -137,16 +137,10 @@ linearfeature_subsetting <- function(watershed.layer, road.layer, rail.layer, st
 # Network extraction # Network extraction based on the new culvert passability model
 ######################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-network_extraction <- function(stream.layer, road.layer, dam.layer, HUC, mineable.boundary, relative.path) {
+network_extraction <- function(watershed.geodatabase, HUC, dam.layer, mineable.boundary, Slope, DEM, MAP, Eref, AT.bridges, NP.rail.bridges, NP.road.bridges, arcpy) {
   
-  require(foreign)
-  require(raster)
-  require(rgdal)
-  require(RPyGeo)
-  require(sf)
-  
-  # Define an increment function for renaming stream segments
-  increment_function <- "
+        # Define an increment function for renaming stream segments
+        increment_function <- "
 rec=0
 def autoIncrement():
     global rec
@@ -157,867 +151,626 @@ def autoIncrement():
     else: 
         rec = rec + pInterval 
     return rec"
+        
+        # Define workspace
+        arcpy$env$workspace <- watershed.geodatabase
   
-  ####################################
-  # Clean the Minable Boundary Layer # 
-  ####################################
+        #####################################
+        # Clean the Mineable Boundary Layer # 
+        #####################################
+        
+        # The layers have strange artifacts between leases. 
+        # Select scheme of interest, buffer the boundary, dissolve, then remove buffer.
+        
+        # Subset the intersect road/mineable and stream layers
+        arcpy$Select_analysis(in_features = mineable.boundary, 
+                              out_feature_class = "MinableSubset_temp",
+                              where_clause = "\"SCHE_NAME\" NOT IN ('Aurora Mine South', 'Jackpine Mine Expansion', 'Frontier Oil Sands Project')")
+        
+        arcpy$PairwiseBuffer_analysis(in_features = "MinableSubset_temp", 
+                                      out_feature_class = "MinableBuffer_temp", 
+                                      buffer_distance_or_field = "15 Meters")
+        
+        arcpy$PairwiseDissolve_analysis(in_features = "MinableBuffer_temp", 
+                                        out_feature_class = "MinableDissolve_temp")
+        
+        # This negative buffer prevents the issue of the stream segment aligning with the boundary of Jackpine Expansion
+        arcpy$PairwiseBuffer_analysis(in_features = "MinableDissolve_temp", 
+                                      out_feature_class = "MineableBoundary", 
+                                      buffer_distance_or_field = "-25 Meters")
   
-  # The layers have strange artifacts between leases. 
-  # Select scheme of interest, buffer the boundary, dissolve, then remove buffer.
+        ############################################
+        # Identification of Dams on Stream Network #
+        ############################################
+        
+        # Identify Dams within the watershed
+        arcpy$PairwiseClip_analysis(in_features = dam.layer, 
+                                    clip_features = "watershed_boundary", 
+                                    out_feature_class = "DamLocationsOriginal_temp")
+        
+        # Convert stream to point to identify the closest node on the stream network
+        arcpy$FeatureVerticesToPoints_management(in_features = "stream_network",
+                                                 out_feature_class = "StreamPoints_temp",
+                                                 point_location = "BOTH_ENDS")
+        
+        arcpy$Near_analysis(in_features = "DamLocationsOriginal_temp", 
+                            near_features = "StreamPoints_temp", 
+                            search_radius = "50 Meters", 
+                            location = "LOCATION",
+                            method = "Geodesic")
+        
+        # Identifies all dams that fall on the current stream network
+        arcpy$Select_analysis(in_features = "DamLocationsOriginal_temp", 
+                              out_feature_class = "DamInclusion_1_temp",
+                              where_clause = "\"NEAR_FID\" <> -1")
+        
+        #############################################
+        # Identification of Dams off Stream Network #
+        #############################################
+        
+        arcpy$Select_analysis(in_features = "DamLocationsOriginal_temp", 
+                              out_feature_class = "DamSubset_temp",
+                              where_clause = "\"NEAR_FID\" = -1")
+        
+        arcpy$Near_analysis(in_features = "DamSubset_temp", 
+                            near_features = "stream_network", 
+                            search_radius = "50 Meters", 
+                            location = "LOCATION",
+                            method = "Geodesic")
+        
+        arcpy$Select_analysis(in_features = "DamSubset_temp", 
+                              out_feature_class ="DamSubset_2_temp",
+                              where_clause = "\"NEAR_FID\" <> -1")
+        
+        arcpy$XYTableToPoint_management(in_table = "DamSubset_2_temp", 
+                                        out_feature_class = "DamInclusion_2_temp", 
+                                        x_field = "NEAR_X",
+                                        y_field = "NEAR_Y")
+        
+        arcpy$SplitLineAtPoint_management(in_features = "stream_network", 
+                                          point_features = "DamInclusion_2_temp", 
+                                          out_feature_class = "StreamDam_Segmentation_temp", 
+                                          search_radius = "5 Meters")
+        
+        # Combine the two dam objects into a single file
+        arcpy$Merge_management(inputs = "DamInclusion_1_temp; DamInclusion_2_temp",
+                               output = "AllDams_temp")
   
-  # Subset the intersect road/minable and stream layers
+        ############################################
+        # Identification of Stream/Road Intersects #
+        ############################################
   
-  arcpy$Select_analysis(in_features = mineable.boundary, 
-                        out_feature_class = paste0(relative.path, "temporary-shapefiles/MinableSubset.shp"),
-                        where_clause = "\"SCHE_NAME\" NOT IN ('Aurora Mine South', 'Jackpine Mine Expansion', 'Frontier Oil Sands Project')")
+        # Intersect the road and the mineable boundary
+        arcpy$FeatureToLine_management(in_features = paste("MineableBoundary", "road_rail", sep = ";"),
+                                       out_feature_class = "RoadsMineable", 
+                                       cluster_tolerance = "", 
+                                       attributes = "ATTRIBUTES")
   
-  arcpy$Buffer_analysis(in_features = paste0(relative.path, "temporary-shapefiles/MinableSubset.shp"), 
-                        out_feature_class = paste0(relative.path, "temporary-shapefiles/MinableBuffer.shp"), 
-                        buffer_distance_or_field = "15 Meters")
+        # Intersect the road/mineable and stream networks and add length attribute
+        arcpy$FeatureToLine_management(in_features = paste("StreamDam_Segmentation_temp", "RoadsMineable", sep = ";"),
+                                       out_feature_class = "StreamRoads", 
+                                       cluster_tolerance = "", 
+                                       attributes = "ATTRIBUTES")
   
-  arcpy$Dissolve_management(in_features = paste0(relative.path, "temporary-shapefiles/MinableBuffer.shp"), 
-                            out_feature_class = paste0(relative.path, "temporary-shapefiles/MinableDissolve.shp"))
+        arcpy$AddGeometryAttributes_management(Input_Features = "StreamRoads", 
+                                               Geometry_Properties = "LENGTH", 
+                                               Length_Unit = "METERS", 
+                                               Area_Unit = "", 
+                                               Coordinate_System = "")
   
-  # This negative buffer prevents the issue of the stream segment aligning with the boundary of Jackpine Expansion
-  arcpy$Buffer_analysis(in_features = paste0(relative.path, "temporary-shapefiles/MinableDissolve.shp"), 
-                        out_feature_class = paste0(relative.path, "MinableBoundary.shp"), 
-                        buffer_distance_or_field = "-25 Meters")
+        # Subset the intersect road/minable and stream layers
+        arcpy$Select_analysis(in_features = "StreamRoads", 
+                              out_feature_class = "StreamSeg",
+                              where_clause = "\"FID_RoadsMineable\" = -1")
   
-  ############################################
-  # Identification of Dams on Stream Network #
-  ############################################
+        arcpy$Select_analysis(in_features = "StreamRoads", 
+                              out_feature_class = "RoadSeg",
+                              where_clause = "\"FID_RoadsMineable\" <> -1")
   
-  # Identify Dams within the watershed
-  arcpy$Clip_analysis(in_features = dam.layer, 
-                      clip_features = paste0("data/base/gis/watersheds/huc-6/", HUC, "_watershed.shp"), 
-                      out_feature_class = paste0(relative.path, "temporary-shapefiles/DamLocationsOriginal.shp"))
+        # Add unique identifier to each stream and road segment in the watershed
+        arcpy$AddField_management(in_table = "StreamSeg",
+                                  field_name = "StreamID", 
+                                  field_type = "DOUBLE")
   
-  # Convert stream to point to identify the closest node on the stream network
-  arcpy$FeatureVerticesToPoints_management(in_features = stream.layer,
-                                           out_feature_class = paste0(relative.path, "temporary-shapefiles/StreamPoints.shp"),
-                                           point_location = "BOTH_ENDS")
+        arcpy$CalculateField_management(in_table = "StreamSeg",
+                                        field = "StreamID",
+                                        expression = "autoIncrement()",
+                                        expression_type = "PYTHON", 
+                                        code_block = increment_function)
   
-  arcpy$Near_analysis(in_features = paste0(relative.path, "temporary-shapefiles/DamLocationsOriginal.shp"), 
-                      near_features = paste0(relative.path, "temporary-shapefiles/StreamPoints.shp"), 
-                      search_radius = "50 Meters", 
-                      location = "LOCATION",
-                      method = "Geodesic")
+        arcpy$AddField_management(in_table = "RoadSeg",
+                                  field_name = "RoadID", 
+                                  field_type = "DOUBLE")
+        
+        arcpy$CalculateField_management(in_table = "RoadSeg",
+                                        field = "RoadID",
+                                        expression = "autoIncrement()",
+                                        expression_type = "PYTHON", 
+                                        code_block = increment_function)
   
-  # Identifies all dams that fall on the current stream network
-  arcpy$Select_analysis(in_features = paste0(relative.path, "temporary-shapefiles/DamLocationsOriginal.shp"), 
-                        out_feature_class = paste0(relative.path, "temporary-shapefiles/DamInclusion_1.shp"),
-                        where_clause = "\"NEAR_FID\" <> -1")
+        # Identify the starting and ending points for the stream segments, and join the connections
+        arcpy$FeatureVerticesToPoints_management(in_features = "StreamSeg",
+                                                 out_feature_class = "StreamSegNodes_temp",
+                                                 point_location = "BOTH_ENDS")
+        
+        arcpy$FeatureVerticesToPoints_management(in_features = "StreamSeg",
+                                                 out_feature_class = "StreamSegStartNodes_temp",
+                                                 point_location = "START")
+        
+        arcpy$FeatureVerticesToPoints_management(in_features = "StreamSeg",
+                                                 out_feature_class = "StreamSegEndNodes_temp",
+                                                 point_location = "END")
   
-  #############################################
-  # Identification of Dams off Stream Network #
-  #############################################
+        arcpy$SpatialJoin_analysis(target_features = "StreamSegNodes_temp",
+                                   join_features = "StreamSegNodes_temp",
+                                   out_feature_class = "StreamConnections_temp",
+                                   join_operation = "JOIN_ONE_TO_MANY")
+        
+        arcpy$SpatialJoin_analysis(target_features = "StreamSegStartNodes_temp",
+                                   join_features = "StreamSegStartNodes_temp",
+                                   out_feature_class = "StreamConnections1_temp",
+                                   join_operation = "JOIN_ONE_TO_ONE")
+        
+        arcpy$SpatialJoin_analysis(target_features = "StreamSegEndNodes_temp",
+                                   join_features = "StreamSegEndNodes_temp",
+                                   out_feature_class = "StreamConnections2_temp",
+                                   join_operation = "JOIN_ONE_TO_ONE")
   
-  arcpy$Select_analysis(in_features = paste0(relative.path, "temporary-shapefiles/DamLocationsOriginal.shp"), 
-                        out_feature_class = paste0(relative.path, "temporary-shapefiles/DamSubset.shp"),
-                        where_clause = "\"NEAR_FID\" = -1")
+        # Remove Identify the Start, End, and all other intersection points
+        arcpy$Select_analysis(in_features = "StreamConnections_temp",
+                              out_feature_class = "StreamConnectionsFilter_temp",
+                              where_clause = "\"StreamID_1\" > \"StreamID\"")
+        
+        arcpy$Select_analysis(in_features = "StreamConnections1_temp",
+                              out_feature_class = "StreamConnectionsFilter1_temp",
+                              where_clause = "\"StreamID_1\" = \"StreamID\"")
+        
+        arcpy$Select_analysis(in_features = "StreamConnections2_temp",
+                              out_feature_class = "StreamConnectionsFilter2_temp",
+                              where_clause = "\"StreamID_1\" = \"StreamID\"")
   
-  arcpy$Near_analysis(in_features = paste0(relative.path, "temporary-shapefiles/DamSubset.shp"), 
-                      near_features = stream.layer, 
-                      search_radius = "50 Meters", 
-                      location = "LOCATION",
-                      method = "Geodesic")
+        # Filter the Start and End points so we exclude self intersecting points at confluences.
+        arcpy$Erase_analysis(in_features = "StreamConnectionsFilter1_temp", 
+                             erase_features = "StreamConnectionsFilter_temp", 
+                             out_feature_class = "stream_start_points_temp")
+        
+        arcpy$Erase_analysis(in_features = "StreamConnectionsFilter2_temp", 
+                             erase_features = "StreamConnectionsFilter_temp", 
+                             out_feature_class = "stream_end_points_temp")
   
-  arcpy$Select_analysis(in_features = paste0(relative.path, "temporary-shapefiles/DamSubset.shp"), 
-                        out_feature_class = paste0(relative.path, "temporary-shapefiles/DamSubset_2.shp"),
-                        where_clause = "\"NEAR_FID\" <> -1")
+        # Merge the Start, End, and other intersections together
+        arcpy$Merge_management(inputs = paste("StreamConnectionsFilter_temp", 
+                                              "stream_start_points_temp", 
+                                              "stream_end_points_temp", sep = ";"),
+                               output = "AllStreamConnection")
+        
+        arcpy$AddField_management(in_table = "AllStreamConnection",
+                                  field_name = "InterID", 
+                                  field_type = "LONG")
+        
+        arcpy$CalculateField_management(in_table = "AllStreamConnection",
+                                        field = "InterID",
+                                        expression = "autoIncrement()",
+                                        expression_type = "PYTHON", 
+                                        code_block = increment_function)
   
-  arcpy$MakeXYEventLayer_management(table = paste0(relative.path, "temporary-shapefiles/DamSubset_2.dbf"), 
-                                    in_x_field = "NEAR_X", 
-                                    in_y_field = "NEAR_Y", 
-                                    out_layer = "DamLayer")
+        # Identify the location of culverts
+        arcpy$FeatureVerticesToPoints_management(in_features = "RoadSeg",
+                                                 out_feature_class = "RoadSegEndNodes_temp",
+                                                 point_location = "END")
   
-  arcpy$SaveToLayerFile_management(in_layer = "DamLayer",
-                                   out_layer = paste0(relative.path, "temporary-shapefiles/DamSubset_3.lyr"))
-  
-  arcpy$CopyFeatures_management(in_features = paste0(relative.path, "temporary-shapefiles/DamSubset_3.lyr"), 
-                                out_feature_class = paste0(relative.path, "temporary-shapefiles/DamInclusion_2.shp"))
-  
-  arcpy$SplitLineAtPoint_management(in_features = stream.layer, 
-                                    point_features = paste0(relative.path, "temporary-shapefiles/DamInclusion_2.shp"), 
-                                    out_feature_class = paste0(relative.path, "temporary-shapefiles/StreamDam_Segmentation.shp"), 
-                                    search_radius = "5 Meters")
-  
-  # Combine the two dam objects into a single file
-  arcpy$Merge_management(inputs = paste(paste0(relative.path, "temporary-shapefiles/DamInclusion_1.shp"), paste0(relative.path, "temporary-shapefiles/DamInclusion_2.shp"), sep = ";"), 
-                         output = paste0(relative.path, "temporary-shapefiles/AllDams.shp"))
-  
-  ############################################
-  # Identification of Stream/Road Intersects #
-  ############################################
-  
-  # Intersect the road and the minable boundary
-  arcpy$FeatureToLine_management(in_features = c(paste(paste0(relative.path, "MinableBoundary.shp"), road.layer, sep = ";")),
-                                 out_feature_class = paste0(relative.path, "RoadsMinable.shp"), 
-                                 cluster_tolerance = "", 
-                                 attributes = "ATTRIBUTES")
-  
-  # Intersect the road/minable and stream networks and add length attribute
-  arcpy$FeatureToLine_management(in_features = c(paste(paste0(relative.path, "temporary-shapefiles/StreamDam_Segmentation.shp"), paste0(relative.path, "RoadsMinable.shp"), sep = ";")),
-                                 out_feature_class = paste0(relative.path, "StreamRoads.shp"), 
-                                 cluster_tolerance = "", 
-                                 attributes = "ATTRIBUTES")
-  
-  arcpy$AddGeometryAttributes_management(Input_Features = paste0(relative.path, "StreamRoads.shp"), 
-                                         Geometry_Properties = "LENGTH", 
-                                         Length_Unit = "METERS", 
-                                         Area_Unit = "", 
-                                         Coordinate_System = "")
-  
-  # Subset the intersect road/minable and stream layers
-  arcpy$Select_analysis(in_features = paste0(relative.path, "StreamRoads.shp"), 
-                        out_feature_class = paste0(relative.path, "StreamSeg.shp"),
-                        where_clause = "\"FID_RoadsM\" = -1")
-  
-  arcpy$Select_analysis(in_features = paste0(relative.path, "StreamRoads.shp"), 
-                        out_feature_class = paste0(relative.path, "RoadSeg.shp"),
-                        where_clause = "\"FID_RoadsM\" <> -1")
-  
-  # Add unique identifier to each stream and road segment in the watershed
-  arcpy$AddField_management(in_table = paste0(relative.path, "StreamSeg.shp"),
-                            field_name = "StreamID", 
-                            field_type = "DOUBLE")
-  
-  arcpy$CalculateField_management(in_table = paste0(relative.path, "StreamSeg.shp"),
-                                  field = "StreamID",
-                                  expression = "autoIncrement()",
-                                  expression_type = "PYTHON", 
-                                  code_block = increment_function)
-  
-  arcpy$AddField_management(in_table = paste0(relative.path, "RoadSeg.shp"),
-                            field_name = "RoadID", 
-                            field_type = "DOUBLE")
-  
-  arcpy$CalculateField_management(in_table = paste0(relative.path, "RoadSeg.shp"),
-                                  field = "RoadID",
-                                  expression = "autoIncrement()",
-                                  expression_type = "PYTHON", 
-                                  code_block = increment_function)
-  
-  # Identify the starting and ending points for the stream segments, and join the connections
-  arcpy$FeatureVerticesToPoints_management(in_features = paste0(relative.path, "StreamSeg.shp"),
-                                           out_feature_class = paste0(relative.path, "temporary-shapefiles/StreamSegNodes.shp"),
-                                           point_location = "BOTH_ENDS")
-  
-  arcpy$FeatureVerticesToPoints_management(in_features = paste0(relative.path, "StreamSeg.shp"),
-                                           out_feature_class = paste0(relative.path, "temporary-shapefiles/StreamSegStartNodes.shp"),
-                                           point_location = "START")
-  
-  arcpy$FeatureVerticesToPoints_management(in_features = paste0(relative.path, "StreamSeg.shp"),
-                                           out_feature_class = paste0(relative.path, "temporary-shapefiles/StreamSegEndNodes.shp"),
-                                           point_location = "END")
-  
-  arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "temporary-shapefiles/StreamSegNodes.shp"),
-                             join_features = paste0(relative.path, "temporary-shapefiles/StreamSegNodes.shp"),
-                             out_feature_class = paste0(relative.path, "temporary-shapefiles/StreamConnections.shp"),
-                             join_operation = "JOIN_ONE_TO_MANY")
-  
-  arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "temporary-shapefiles/StreamSegStartNodes.shp"),
-                             join_features = paste0(relative.path, "temporary-shapefiles/StreamSegStartNodes.shp"),
-                             out_feature_class = paste0(relative.path, "temporary-shapefiles/StreamConnections1.shp"),
-                             join_operation = "JOIN_ONE_TO_ONE")
-  
-  arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "temporary-shapefiles/StreamSegEndNodes.shp"),
-                             join_features = paste0(relative.path, "temporary-shapefiles/StreamSegEndNodes.shp"),
-                             out_feature_class = paste0(relative.path, "temporary-shapefiles/StreamConnections2.shp"),
-                             join_operation = "JOIN_ONE_TO_ONE")
-  
-  # Remove Identify the Start, End, and all other intersection points
-  arcpy$Select_analysis(in_features = paste0(relative.path, "temporary-shapefiles/StreamConnections.shp"),
-                        out_feature_class = paste0(relative.path, "temporary-shapefiles/StreamConnectionsFilter.shp"),
-                        where_clause = "\"StreamID_1\" > \"StreamID\"")
-  
-  arcpy$Select_analysis(in_features = paste0(relative.path, "temporary-shapefiles/StreamConnections1.shp"),
-                        out_feature_class = paste0(relative.path, "temporary-shapefiles/StreamConnectionsFilter1.shp"),
-                        where_clause = "\"StreamID_1\" = \"StreamID\"")
-  
-  arcpy$Select_analysis(in_features = paste0(relative.path, "temporary-shapefiles/StreamConnections2.shp"),
-                        out_feature_class = paste0(relative.path, "temporary-shapefiles/StreamConnectionsFilter2.shp"),
-                        where_clause = "\"StreamID_1\" = \"StreamID\"")
-  
-  # Filter the Start and End points so we exclude self intersecting points at confluences.
-  arcpy$Erase_analysis(in_features = paste0(relative.path, "temporary-shapefiles/StreamConnectionsFilter1.shp"), 
-                       erase_features = paste0(relative.path, "temporary-shapefiles/StreamConnectionsFilter.shp"), 
-                       out_feature_class = paste0(relative.path, "temporary-shapefiles/stream_start_points.shp"))
-  
-  arcpy$Erase_analysis(in_features = paste0(relative.path, "temporary-shapefiles/StreamConnectionsFilter2.shp"), 
-                       erase_features = paste0(relative.path, "temporary-shapefiles/StreamConnectionsFilter.shp"), 
-                       out_feature_class = paste0(relative.path, "temporary-shapefiles/stream_end_points.shp"))
-  
-  # Merge the Start, End, and other intersections together
-  arcpy$Merge_management(inputs = paste(paste0(relative.path, "temporary-shapefiles/StreamConnectionsFilter.shp"), 
-                                        paste0(relative.path, "temporary-shapefiles/stream_start_points.shp"), 
-                                        paste0(relative.path, "temporary-shapefiles/stream_end_points.shp"), sep = ";"),
-                         output = paste0(relative.path, "AllStreamConnection.shp"))
-  
-  arcpy$AddField_management(in_table = paste0(relative.path, "AllStreamConnection.shp"),
-                            field_name = "InterID", 
-                            field_type = "LONG")
-  
-  arcpy$CalculateField_management(in_table = paste0(relative.path, "AllStreamConnection.shp"),
-                                  field = "InterID",
-                                  expression = "autoIncrement()",
-                                  expression_type = "PYTHON", 
-                                  code_block = increment_function)
-  
-  # Identify the location of culverts
-  arcpy$FeatureVerticesToPoints_management(in_features = paste0(relative.path, "RoadSeg.shp"),
-                                           out_feature_class = paste0(relative.path, "temporary-shapefiles/RoadSegEndNodes.shp"),
-                                           point_location = "END")
-  
-  # Filter information except the Feature type
-  field.list <- arcpy$ListFields(dataset = paste0(relative.path, "temporary-shapefiles/RoadSegEndNodes.shp"),
-                                 field_type = "All")
-  field.list <- unlist(lapply(field.list, function(x) x$name))
-  field.list <- field.list[!field.list %in% c("FID", "Shape", "FEATURE_TY")] # Excluding the FID and shape fields
-  
-  # Remove all remaining attributes
-  arcpy$DeleteField_management(in_table = paste0(relative.path, "temporary-shapefiles/RoadSegEndNodes.shp"), 
-                               drop_field = field.list)
-  
-  ######################################################
-  # Identification of Culverts and Variable Extraction #
-  ######################################################
-  
-  # Identify culverts
-  arcpy$Clip_analysis(in_features = paste0(relative.path, "AllStreamConnection.shp"), 
-                      clip_features = paste0(relative.path, "temporary-shapefiles/RoadSegEndNodes.shp"), 
-                      out_feature_class = paste0(relative.path, "temporary-shapefiles/CulvertsTemp.shp"))
-  
-  # Merge with the appropriate footprint information
-  arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "temporary-shapefiles/CulvertsTemp.shp"),
-                             join_features = paste0(relative.path, "temporary-shapefiles/RoadSegEndNodes.shp"),
-                             out_feature_class = paste0(relative.path, "Culverts.shp"),
-                             join_operation = "JOIN_ONE_TO_ONE")
-  
-  n.culverts <- read.dbf(paste0(relative.path, "Culverts.dbf"))
-  
-  # If there are no culverts in the region, skip the extraction and store only the relevant node information.
-  if (nrow(n.culverts) == 0) {
-    
-    # Nodes
-    node.data  <- read.dbf(paste0(relative.path, "StreamSeg.dbf"))
-    node.data <- data.frame(
-      Stream = node.data$StreamID,
-      SectionLength = node.data$LENGTH,
-      Watershed = rep(HUC, nrow(node.data)),
-      StreamType = node.data$StrmType,
-      HabitatType = node.data$Strahler,
-      HabitatQuality = rep(1, nrow(node.data))
-    )
-    
-    return(list(node.data))
-    
-  } else {
-    
-    ###############
-    # Topographic #
-    ###############
-    
-    arcpy$sa$ExtractValuesToPoints(in_point_features = paste0(relative.path, "Culverts.shp"), 
-                                   in_raster = "G:/Shared drives/ABMI_LUS_Submissions/LoticConnectivity/TPI500_LiDAR.tif", 
-                                   out_point_features = paste0(getwd(), "/", relative.path, "temporary-shapefiles/TPI_Point.shp"), 
-                                   interpolate_values = "NONE")
-    
-    arcpy$sa$ExtractValuesToPoints(in_point_features = paste0(relative.path, "Culverts.shp"), 
-                                   in_raster = "G:/Shared drives/ABMI_LUS_Submissions/LoticConnectivity/VBF_LIDAR.tif", 
-                                   out_point_features = paste0(getwd(), "/", relative.path, "temporary-shapefiles/VBF_Point.shp"), 
-                                   interpolate_values = "NONE")
-    
-    arcpy$sa$ExtractValuesToPoints(in_point_features = paste0(relative.path, "Culverts.shp"), 
-                                   in_raster = "G:/Shared drives/ABMI_LUS_Submissions/LoticConnectivity/Slope_LiDAR.tif", 
-                                   out_point_features = paste0(getwd(), "/", relative.path, "temporary-shapefiles/", "Slope_Point.shp"), 
-                                   interpolate_values = "NONE")
-    
-    arcpy$sa$ExtractValuesToPoints(in_point_features = paste0(relative.path, "Culverts.shp"), 
-                                   in_raster = "G:/Shared drives/ABMI_LUS_Submissions/LoticConnectivity/SWI_LiDAR.tif", 
-                                   out_point_features = paste0(getwd(), "/", relative.path, "temporary-shapefiles/TWI_Point.shp"), 
-                                   interpolate_values = "NONE")
-    
-    arcpy$sa$ExtractValuesToPoints(in_point_features = paste0(relative.path, "Culverts.shp"), 
-                                   in_raster = "G:/Shared drives/ABMI_LUS_Submissions/LoticConnectivity/HAND1_SRTM.tif", 
-                                   out_point_features = paste0(getwd(), "/", relative.path, "temporary-shapefiles/HAND_Point.shp"), 
-                                   interpolate_values = "NONE")
-    
-    ################
-    # Stream slope #
-    ################
-    
-    # Confluence bound
-    arcpy$sa$ExtractValuesToPoints(in_point_features = paste0(relative.path, "AllStreamConnection.shp"),
-                                   in_raster = "//gisserver.abmi.ca/GIS/Terrain/DEM_SRTM/GEE_srtm_mosaic/srtm.tif",
-                                   out_point_features = paste0(getwd(), "/", relative.path, "temporary-shapefiles/Confluence_Elevation.shp"),
-                                   interpolate_values = "NONE")
-    
-    # Reach bound
-    
-    # Create buffer to identify slope around culvert
-    arcpy$Buffer_analysis(in_features = paste0(relative.path, "Culverts.shp"),
-                          out_feature_class = paste0(relative.path, "temporary-shapefiles/culvert_150.shp"),
-                          buffer_distance_or_field = "150 Meters",
-                          dissolve_option = "NONE",
-                          method = "GEODESIC")
-    
-    # Intersect boundary of buffer with stream network to identify bounds of the reach
-    arcpy$Intersect_analysis(in_features = paste(paste0(relative.path, "StreamSeg.shp"), paste0(relative.path, "temporary-shapefiles/culvert_150.shp"), sep = ";"),
-                             out_feature_class = paste0(relative.path, "temporary-shapefiles/reach_points.shp"),
-                             join_attributes = "ALL",
-                             output_type = "POINT")
-    
-    # Clip the steam segments and known connection points to within the buffer
-    arcpy$Clip_analysis(in_features = paste0(relative.path, "AllStreamConnection.shp"),
-                        clip_features = paste0(relative.path, "temporary-shapefiles/culvert_150.shp"),
-                        out_feature_class = paste0(relative.path, "temporary-shapefiles/subset_points.shp"))
-    
-    arcpy$Clip_analysis(in_features = paste0(relative.path, "StreamSeg.shp"),
-                        clip_features = paste0(relative.path, "temporary-shapefiles/culvert_150.shp"),
-                        out_feature_class = paste0(relative.path, "temporary-shapefiles/stream_reach.shp"))
-    
-    # Align the reach points with the stream layer, then split the line by the new locations
-    arcpy$Integrate_management(in_features = paste(paste0(relative.path, "temporary-shapefiles/reach_points.shp"),
-                                                   paste0(relative.path, "temporary-shapefiles/stream_reach.shp"),
-                                                   sep = ";"))
-    
-    arcpy$SplitLineAtPoint_management(in_features = paste0(relative.path, "temporary-shapefiles/stream_reach.shp"),
-                                      point_features = paste0(relative.path, "temporary-shapefiles/reach_points.shp"),
-                                      out_feature_class = paste0(relative.path, "StreamReach.shp"),
-                                      search_radius = "1 Meter")
-    
-    # Recalculate stream lengths
-    arcpy$AddGeometryAttributes_management(Input_Features = paste0(relative.path, "StreamReach.shp"),
-                                           Geometry_Properties = "LENGTH",
-                                           Length_Unit = "METERS",
-                                           Area_Unit = "",
-                                           Coordinate_System = "")
-    
-    # Simplify the stream layer by removing useless attributes and create a new numbering system
-    arcpy$AddField_management(in_table = paste0(relative.path, "StreamReach.shp"),
-                              field_name = "REACHID", 
-                              field_type = "LONG")
-    
-    arcpy$CalculateField_management(in_table = paste0(relative.path, "StreamReach.shp"),
-                                    field = "REACHID",
-                                    expression = "autoIncrement()",
-                                    expression_type = "PYTHON", 
-                                    code_block = increment_function)
-    
-    field.list <- arcpy$ListFields(dataset = paste0(relative.path, "StreamReach.shp"),
-                                   field_type = "All")
-    field.list <- unlist(lapply(field.list, function(x) x$name))
-    field.list <- field.list[!field.list %in% c("FID", "Shape", "REACHID", "StrmType", "Strahler", "LENGTH")] # Excluding the FID and shape fields
-    
-    arcpy$DeleteField_management(in_table = paste0(relative.path, "StreamReach.shp"), 
-                                 drop_field = field.list)
-    
-    # Clean up the three point files (Reach, Culvert, Stream Connection) and merge
-    
-    # Reach
-    field.list <- arcpy$ListFields(dataset = paste0(relative.path, "temporary-shapefiles/reach_points.shp"),
-                                   field_type = "All")
-    field.list <- unlist(lapply(field.list, function(x) x$name))
-    field.list <- field.list[!field.list %in% c("FID", "Shape", "FEATURE_TY", "InterID")] # Excluding the FID and shape fields
-    
-    arcpy$DeleteField_management(in_table = paste0(relative.path, "temporary-shapefiles/reach_points.shp"), 
-                                 drop_field = field.list)
-    
-    # Update dbf 
-    temp.dbf <- read.dbf(paste0(relative.path, "temporary-shapefiles/reach_points.dbf"))
-    temp.dbf$FEATURE_TY <- "Reach"
-    write.dbf(dataframe = temp.dbf, 
-              file = paste0(relative.path, "temporary-shapefiles/reach_points.dbf"),
-              max_nchar = 6)
-    
-    # Convert to points from multipoints
-    arcpy$FeatureToPoint_management(in_features = paste0(relative.path, "temporary-shapefiles/reach_points.shp"),
-                                    out_feature_class = paste0(relative.path, "temporary-shapefiles/reach_single_points.shp"))
-    
-    # Stream Connections
-    arcpy$Erase_analysis(in_features = paste0(relative.path, "temporary-shapefiles/subset_points.shp"), 
-                         erase_features = paste0(relative.path, "Culverts.shp"), 
-                         out_feature_class = paste0(relative.path, "temporary-shapefiles/stream_points.shp"))
-    
-    field.list <- arcpy$ListFields(dataset = paste0(relative.path, "temporary-shapefiles/stream_points.shp"),
-                                   field_type = "All")
-    field.list <- unlist(lapply(field.list, function(x) x$name))
-    field.list <- field.list[!field.list %in% c("FID", "Shape", "FEATURE_TY", "InterID")] # Excluding the FID and shape fields
-    
-    arcpy$DeleteField_management(in_table = paste0(relative.path, "temporary-shapefiles/stream_points.shp"), 
-                                 drop_field = field.list)
-    
-    # Update dbf 
-    temp.dbf <- read.dbf(paste0(relative.path, "temporary-shapefiles/stream_points.dbf"))
-    if(nrow(temp.dbf) != 0) {
-      
-      temp.dbf$FEATURE_TY <- "Stream"
-      write.dbf(dataframe = temp.dbf, 
-                file = paste0(relative.path, "temporary-shapefiles/stream_points.dbf"),
-                max_nchar = 6)
-      
-    }
-    
-    # Culverts
-    arcpy$CopyFeatures_management(in_features = paste0(relative.path, "Culverts.shp"), 
-                                  out_feature_class = paste0(relative.path, "temporary-shapefiles/culvert_points.shp"))
-    
-    field.list <- arcpy$ListFields(dataset = paste0(relative.path, "temporary-shapefiles/culvert_points.shp"),
-                                   field_type = "All")
-    field.list <- unlist(lapply(field.list, function(x) x$name))
-    field.list <- field.list[!field.list %in% c("FID", "Shape", "FEATURE_TY", "InterID")] # Excluding the FID and shape fields
-    
-    arcpy$DeleteField_management(in_table = paste0(relative.path, "temporary-shapefiles/culvert_points.shp"), 
-                                 drop_field = field.list)
-    
-    # Update dbf 
-    temp.dbf <- read.dbf(paste0(relative.path, "temporary-shapefiles/culvert_points.dbf"))
-    temp.dbf$FEATURE_TY <- "Culvert"
-    write.dbf(dataframe = temp.dbf, 
-              file = paste0(relative.path, "temporary-shapefiles/culvert_points.dbf"),
-              max_nchar = 6)
-    
-    # Combine point locations into one file and label as Culvert, Connection, Reach
-    arcpy$Merge_management(inputs = paste(paste0(relative.path, "temporary-shapefiles/stream_points.shp"),
-                                          paste0(relative.path, "temporary-shapefiles/culvert_points.shp"), 
-                                          paste0(relative.path, "temporary-shapefiles/reach_single_points.shp"),
-                                          sep = ";"), 
-                           output = paste0(relative.path, "temporary-shapefiles/reach_connections.shp"))
-    
-    arcpy$AddField_management(in_table = paste0(relative.path, "temporary-shapefiles/reach_connections.shp"),
-                              field_name = "PointID", 
-                              field_type = "LONG")
-    
-    arcpy$CalculateField_management(in_table = paste0(relative.path, "temporary-shapefiles/reach_connections.shp"),
-                                    field = "PointID",
-                                    expression = "autoIncrement()",
-                                    expression_type = "PYTHON", 
-                                    code_block = increment_function)
-    
-    # Calculate node network
-    
-    # Identify the starting and ending points for the stream segments, and join the connections
-    arcpy$FeatureVerticesToPoints_management(in_features = paste0(relative.path, "StreamReach.shp"),
-                                             out_feature_class = paste0(relative.path, "temporary-shapefiles/ReachSegNodes.shp"),
-                                             point_location = "BOTH_ENDS")
-    
-    arcpy$FeatureVerticesToPoints_management(in_features = paste0(relative.path, "StreamReach.shp"),
-                                             out_feature_class = paste0(relative.path, "temporary-shapefiles/ReachSegStartNodes.shp"),
-                                             point_location = "START")
-    
-    arcpy$FeatureVerticesToPoints_management(in_features = paste0(relative.path, "StreamReach.shp"),
-                                             out_feature_class = paste0(relative.path, "temporary-shapefiles/ReachSegEndNodes.shp"),
-                                             point_location = "END")
-    
-    arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "temporary-shapefiles/ReachSegNodes.shp"),
-                               join_features = paste0(relative.path, "temporary-shapefiles/ReachSegNodes.shp"),
-                               out_feature_class = paste0(relative.path, "temporary-shapefiles/ReachConnections.shp"),
-                               join_operation = "JOIN_ONE_TO_MANY")
-    
-    arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "temporary-shapefiles/ReachSegStartNodes.shp"),
-                               join_features = paste0(relative.path, "temporary-shapefiles/ReachSegStartNodes.shp"),
-                               out_feature_class = paste0(relative.path, "temporary-shapefiles/ReachConnections1.shp"),
-                               join_operation = "JOIN_ONE_TO_ONE")
-    
-    arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "temporary-shapefiles/ReachSegEndNodes.shp"),
-                               join_features = paste0(relative.path, "temporary-shapefiles/ReachSegEndNodes.shp"),
-                               out_feature_class = paste0(relative.path, "temporary-shapefiles/ReachConnections2.shp"),
-                               join_operation = "JOIN_ONE_TO_ONE")
-    
-    # Remove self intersecting nodes by finding nodes with same StreamIDs
-    arcpy$Select_analysis(in_features = paste0(relative.path, "temporary-shapefiles/ReachConnections.shp"),
-                          out_feature_class = paste0(relative.path, "temporary-shapefiles/ReachConnectionsFilter.shp"),
-                          where_clause = "\"REACHID_1\" > \"REACHID\"")
-    
-    arcpy$Select_analysis(in_features = paste0(relative.path, "temporary-shapefiles/ReachConnections1.shp"),
-                          out_feature_class = paste0(relative.path, "temporary-shapefiles/ReachConnectionsFilter1.shp"),
-                          where_clause = "\"REACHID_1\" = \"REACHID\"")
-    
-    arcpy$Select_analysis(in_features = paste0(relative.path, "temporary-shapefiles/ReachConnections2.shp"),
-                          out_feature_class = paste0(relative.path, "temporary-shapefiles/ReachConnectionsFilter2.shp"),
-                          where_clause = "\"REACHID_1\" = \"REACHID\"")
-    
-    # Combine the node network together into a single file and create unique ID for each intersection
-    arcpy$Erase_analysis(in_features = paste0(relative.path, "temporary-shapefiles/ReachConnectionsFilter1.shp"),
-                         erase_features = paste0(relative.path, "temporary-shapefiles/ReachConnectionsFilter.shp"),
-                         out_feature_class = paste0(relative.path, "temporary-shapefiles/reach_start_points.shp"))
-    
-    arcpy$Erase_analysis(in_features = paste0(relative.path, "temporary-shapefiles/ReachConnectionsFilter2.shp"),
-                         erase_features = paste0(relative.path, "temporary-shapefiles/ReachConnectionsFilter.shp"),
-                         out_feature_class = paste0(relative.path, "temporary-shapefiles/reach_end_points.shp"))
-    
-    arcpy$Merge_management(inputs = paste(paste0(relative.path, "temporary-shapefiles/ReachConnectionsFilter.shp"),
-                                          paste0(relative.path, "temporary-shapefiles/reach_start_points.shp"),
-                                          paste0(relative.path, "temporary-shapefiles/reach_end_points.shp"), sep = ";"),
-                           output = paste0(relative.path, "temporary-shapefiles/all_reach_filtered.shp"))
-    
-    arcpy$AddField_management(in_table = paste0(relative.path, "temporary-shapefiles/all_reach_filtered.shp"),
-                              field_name = "PointID",
-                              field_type = "LONG")
-    
-    arcpy$CalculateField_management(in_table = paste0(relative.path, "temporary-shapefiles/all_reach_filtered.shp"),
-                                    field = "PointID",
-                                    expression = "autoIncrement()",
-                                    expression_type = "PYTHON",
-                                    code_block = increment_function)
-    
-    # Elevation extraction
-    arcpy$sa$ExtractValuesToPoints(in_point_features = paste0(relative.path, "temporary-shapefiles/all_reach_filtered.shp"),
-                                   in_raster = "//gisserver.abmi.ca/GIS/Terrain/DEM_SRTM/GEE_srtm_mosaic/srtm.tif",
-                                   out_point_features = paste0(getwd(), "/", relative.path, "temporary-shapefiles/reach_elevation.shp"),
-                                   interpolate_values = "NONE")
-    
-    arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "temporary-shapefiles/reach_elevation.shp"),
-                               join_features = paste0(relative.path, "temporary-shapefiles/reach_connections.shp"),
-                               out_feature_class = paste0(relative.path, "AllReachConnections.shp"),
-                               join_operation = "JOIN_ONE_TO_ONE")
-    
-    # Update dbf 
-    temp.dbf <- read.dbf(paste0(relative.path, "AllReachConnections.dbf"))
-    temp.dbf$FEATURE_TY <- as.character(temp.dbf$FEATURE_TY)
-    temp.dbf$FEATURE_TY[is.na(temp.dbf$FEATURE_TY)] <- "End"
-    write.dbf(dataframe = temp.dbf, 
-              file = paste0(relative.path, "AllReachConnections.dbf"),
-              max_nchar = 6)
-    
-    ###########
-    # Climate #
-    ###########
-    
-    arcpy$sa$ExtractValuesToPoints(in_point_features = paste0(relative.path, "Culverts.shp"), 
-                                   in_raster = "data/base/gis/climate/MAP.asc", 
-                                   out_point_features = paste0(getwd(), "/", relative.path, "temporary-shapefiles/", "MAP_Point.shp"), 
-                                   interpolate_values = "NONE")
-    
-    arcpy$sa$ExtractValuesToPoints(in_point_features = paste0(relative.path, "Culverts.shp"), 
-                                   in_raster = "data/base/gis/climate/FFP.asc", 
-                                   out_point_features = paste0(getwd(), "/", relative.path, "temporary-shapefiles/", "FFP_Point.shp"), 
-                                   interpolate_values = "NONE")
-    
-    arcpy$sa$ExtractValuesToPoints(in_point_features = paste0(relative.path, "Culverts.shp"), 
-                                   in_raster = "data/base/gis/climate/Eref.asc", 
-                                   out_point_features = paste0(getwd(), "/", relative.path, "temporary-shapefiles/", "Eref_Point.shp"), 
-                                   interpolate_values = "NONE")
-    
-    arcpy$sa$ExtractValuesToPoints(in_point_features = paste0(relative.path, "Culverts.shp"), 
-                                   in_raster = "data/base/gis/climate/AHM.asc", 
-                                   out_point_features = paste0(getwd(), "/", relative.path, "temporary-shapefiles/", "AHM_Point.shp"), 
-                                   interpolate_values = "NONE")
-    
-    #########################
-    # Bridge Identification #
-    #########################
-    
-    # Alberta Transportation
-    arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "Culverts.shp"),
-                               join_features = "C:/users/beallen/desktop/Lotic-Connectivity/data/base/gis/bridges/alberta-transportation/Bridges-20m-3400_2019.shp",
-                               out_feature_class = paste0(relative.path, "ATBridges.shp"),
-                               join_operation = "JOIN_ONE_TO_MANY")
-    
-    # Rail bridges NP
-    arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "Culverts.shp"),
-                               join_features = "C:/users/beallen/desktop/Lotic-Connectivity/data/base/gis/bridges/access-layer/railway-bridges-np-20m_2020.shp",
-                               out_feature_class = paste0(relative.path, "RailBridges.shp"),
-                               join_operation = "JOIN_ONE_TO_MANY")
-    
-    # Road bridges NP
-    arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "Culverts.shp"),
-                               join_features = "C:/users/beallen/desktop/Lotic-Connectivity/data/base/gis/bridges/access-layer/road-bridges-np-20m_2020.shp",
-                               out_feature_class = paste0(relative.path, "RoadBridges.shp"),
-                               join_operation = "JOIN_ONE_TO_MANY")
-    
-    ######################
-    # Dam Identification #
-    ###################### 
+        ######################################################
+        # Identification of Culverts and Variable Extraction #
+        ######################################################
+        
+        # Identify culverts
+        arcpy$Clip_analysis(in_features = "AllStreamConnection", 
+                            clip_features = "RoadSegEndNodes_temp", 
+                            out_feature_class = "Culverts_temp")
+        
+        # Merge with the appropriate footprint information
+        arcpy$SpatialJoin_analysis(target_features = "Culverts_temp",
+                                   join_features = "RoadSegEndNodes_temp",
+                                   out_feature_class = "Culverts",
+                                   join_operation = "JOIN_ONE_TO_ONE")
+        
+        n.culverts <- as.numeric(as.character(arcpy$GetCount_management("Culverts")))
+        
+        # If there are no culverts in the region, skip the extraction and store only the relevant node information.
+        if (n.culverts == 0) {
+                
+                # As we can't directly read the table from the geodatabase, we simply write it to a scratch
+                # directory and import using the foreign package
+                streamseg.temp <- as.character(arcpy$TableSelect_analysis(in_table = "StreamSeg", 
+                                                                          out_table = "StreamSeg_temp.shp"))
+                
+                # Nodes
+                node.data  <- read.dbf(streamseg.temp)
+                node.data <- data.frame(Stream = node.data$StreamID,
+                                        SectionLength = node.data$LENGTH,
+                                        Watershed = rep(HUC, nrow(node.data)),
+                                        StreamType = node.data$StrmType,
+                                        HabitatType = node.data$Strahler,
+                                        HabitatQuality = rep(1, nrow(node.data)))
+                
+                # Delete the temp file
+                arcpy$Delete_management(streamseg.temp)
+                
+                return(list(node.data))
+                
+        } else {
+                
+                ###############
+                # Topographic #
+                ###############
+                
+                # Slope at culvert location
+                arcpy$sa$ExtractValuesToPoints(in_point_features = "Culverts", 
+                                               in_raster = Slope, 
+                                               out_point_features = "SlopePoint_temp", 
+                                               interpolate_values = "NONE")
+    
+                ################
+                # Stream slope #
+                ################
+                
+                # Elevation of stream segments used to calculate slope
+                arcpy$sa$ExtractValuesToPoints(in_point_features = "AllStreamConnection",
+                                               in_raster = DEM,
+                                               out_point_features = "Elevation_temp",
+                                               interpolate_values = "NONE")
+                
+                ###########
+                # Climate #
+                ###########
+                
+                # Mean annual precipitation
+                arcpy$sa$ExtractValuesToPoints(in_point_features = "Culverts", 
+                                               in_raster = MAP, 
+                                               out_point_features = "MAP_temp", 
+                                               interpolate_values = "NONE")
+                
+                # Evapotranspiration
+                arcpy$sa$ExtractValuesToPoints(in_point_features = "Culverts", 
+                                               in_raster = Eref, 
+                                               out_point_features = "Eref_temp", 
+                                               interpolate_values = "NONE")
 
-    arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "temporary-shapefiles/AllDams.shp"),
-                               join_features = paste0(relative.path, "AllStreamConnection.shp"),
-                               out_feature_class = paste0(relative.path, "Dams.shp"),
-                               join_operation = "JOIN_ONE_TO_ONE", 
-                               match_option = "WITHIN_A_DISTANCE_GEODESIC",
-                               search_radius = "50 Meters")
-    
-    #################################
-    # Minable Region Identification #
-    #################################
-    
-    arcpy$Clip_analysis(in_features = paste0(relative.path, "AllStreamConnection.shp"),
-                        clip_features = paste0(relative.path, "MinableBoundary.shp"),
-                        out_feature_class = paste0(relative.path, "IntersectMinable.shp"))
-    
-    
-    #############################
-    # Watershed Characteristics #
-    #############################
-    
-    arcpy$Dissolve_management(in_features = paste0("data/base/gis/watersheds/huc-6/", HUC, "_watershed.shp"),
-                              out_feature_class = paste0(relative.path, "temporary-shapefiles/watershed_summaries.shp"),
-                              dissolve_field = "HUC_8")
-    
-    # Area
-    arcpy$AddGeometryAttributes_management(Input_Features = paste0(relative.path, "temporary-shapefiles/watershed_summaries.shp"),
-                                           Geometry_Properties = "AREA",
-                                           Length_Unit = "METERS",
-                                           Area_Unit = "SQUARE_METERS")
-    
-    # Perimeter
-    arcpy$AddGeometryAttributes_management(Input_Features = paste0(relative.path, "temporary-shapefiles/watershed_summaries.shp"),
-                                           Geometry_Properties = "PERIMETER_LENGTH_GEODESIC",
-                                           Length_Unit = "METERS",
-                                           Area_Unit = "SQUARE_METERS")
-    
-    # Basin Length
-    
-    huc.8.boundaries <- read.dbf(paste0("data/base/gis/watersheds/huc-6/", HUC, "_watershed.dbf"))
-    
-    for (basin.id in as.character(unique(huc.8.boundaries$HUC_8))) {
-      
-      arcpy$Select_analysis(in_features = paste0("data/base/gis/watersheds/huc-6/", HUC, "_watershed.shp"),
-                            out_feature_class = paste0(relative.path, "temporary-shapefiles/", basin.id, "_watershed.shp"),
-                            where_clause = paste0("\"HUC_8\" IN ('", basin.id, "')"))
-      
-      arcpy$Dissolve_management(in_features = paste0(relative.path, "temporary-shapefiles/", basin.id, "_watershed.shp"), 
-                                out_feature_class = paste0(relative.path, "temporary-shapefiles/", basin.id, "_watershed_dissolve.shp"), 
-                                dissolve_field = "HUC_8")
-      
-      arcpy$Intersect_analysis(in_features = paste(paste0(relative.path, "StreamSeg.shp"), paste0(relative.path, "temporary-shapefiles/", basin.id, "_watershed_dissolve.shp"), sep = ";"), 
-                               out_feature_class = paste0(relative.path, "temporary-shapefiles/", basin.id, "_pour_point.shp"),
-                               join_attributes = "ALL", 
-                               output_type = "POINT")
-      
-      arcpy$FeatureToPoint_management(in_features = paste0(relative.path, "temporary-shapefiles/", basin.id, "_pour_point.shp"), 
-                                      out_feature_class = paste0(relative.path, "temporary-shapefiles/", basin.id, "_pour_point_single.shp"))
-      
-      arcpy$sa$ExtractValuesToPoints(in_point_features = paste0(relative.path, "temporary-shapefiles/", basin.id, "_pour_point_single.shp"),
-                                     in_raster = "//gisserver.abmi.ca/GIS/Terrain/DEM_SRTM/GEE_srtm_mosaic/srtm.tif",
-                                     out_point_features = paste0(getwd(), "/", relative.path, "temporary-shapefiles/", basin.id, "_pour_point_elevation.shp"),
-                                     interpolate_values = "NONE")
-      
-      arcpy$SpatialJoin_analysis(target_features = paste0(relative.path, "temporary-shapefiles/", basin.id, "_pour_point_elevation.shp"),
-                                 join_features = paste0(relative.path, "StreamSeg.shp"),
-                                 out_feature_class = paste0(relative.path, "temporary-shapefiles/", basin.id, "_pour_point_id.shp"),
-                                 join_operation = "JOIN_ONE_TO_ONE", 
-                                 match_option = "WITHIN_A_DISTANCE_GEODESIC",
-                                 search_radius = "1 Meters")
-      
-    }
 
-    #################################
-    # Creation on final data frames #
-    #################################
+                #########################
+                # Bridge Identification #
+                #########################
+                
+                # Alberta Transportation
+                arcpy$SpatialJoin_analysis(target_features = "Culverts",
+                                           join_features = AT.bridges,
+                                           out_feature_class = "ATBridges",
+                                           join_operation = "JOIN_ONE_TO_MANY")
     
-    # Alignment of culvert point attributes
-    att.type <- c("TPI", "VBF", "Slope", "TWI", "HAND", "MAP", "FFP", "Eref", "AHM")
+                # Rail bridges NP
+                arcpy$SpatialJoin_analysis(target_features = "Culverts",
+                                           join_features = NP.rail.bridges,
+                                           out_feature_class = "NPRailBridges",
+                                           join_operation = "JOIN_ONE_TO_MANY")
+                
+                # Road bridges NP
+                arcpy$SpatialJoin_analysis(target_features = "Culverts",
+                                           join_features = NP.road.bridges,
+                                           out_feature_class = "NPRoadBridges",
+                                           join_operation = "JOIN_ONE_TO_MANY")
     
-    for (att.id in att.type) {
-      
-      if(att.id == "TPI") {
-        
-        tpi.point <- read.dbf(paste0(relative.path, "temporary-shapefiles/TPI_Point.dbf"))
-        culvert.df <- data.frame(InterID = tpi.point$InterID,
-                                 TPI_Point = tpi.point$RASTERVALU)
-        rm(tpi.point)
-        
-      }else {
-        
-        temp.point <- read.dbf(paste0(relative.path, "temporary-shapefiles/", att.id, "_Point.dbf"))
-        temp.point <- temp.point[, c("InterID", "RASTERVALU")]
-        colnames(temp.point)[2] <- paste0(att.id, "_Point")
-        culvert.df <- merge.data.frame(culvert.df, temp.point, by = "InterID")
-        rm(temp.point)
-        
-      }
-      
-    }
+                ######################
+                # Dam Identification #
+                ###################### 
+                
+                # AB Transportation Dams
+                arcpy$SpatialJoin_analysis(target_features = "AllDams_temp",
+                                           join_features = "AllStreamConnection",
+                                           out_feature_class = "Dams",
+                                           join_operation = "JOIN_ONE_TO_ONE", 
+                                           match_option = "WITHIN_A_DISTANCE_GEODESIC",
+                                           search_radius = "50 Meters")
     
-    colnames(culvert.df)[1] <- "TARGET_FID"
+                #################################
+                # Mineable Region Identification #
+                #################################
+                
+                arcpy$Clip_analysis(in_features = "AllStreamConnection",
+                                    clip_features = "MineableBoundary",
+                                    out_feature_class = "IntersectMineable")
     
-    # Final data sets
-    node.data  <- read.dbf(paste0(relative.path, "StreamSeg.dbf"))
     
-    # Nodes
-    node.data <- data.frame(
-      Stream = node.data$StreamID,
-      SectionLength = node.data$LENGTH,
-      Watershed = rep(HUC, nrow(node.data)),
-      StreamType = node.data$StrmType,
-      HabitatType = node.data$Strahler,
-      HabitatQuality = rep(1, nrow(node.data))
-    )
+                #############################
+                # Watershed Characteristics #
+                #############################
+                
+                arcpy$Dissolve_management(in_features = "watershed_boundary",
+                                          out_feature_class = "watershed_summaries_temp",
+                                          dissolve_field = "HUC_8")
     
-    basin.df <- data.frame(HUC_8 = as.character(unique(huc.8.boundaries$HUC_8)),
-                           PourStream = NA,
-                           PourElevation = NA)
+                # Area
+                arcpy$AddGeometryAttributes_management(Input_Features = "watershed_summaries_temp",
+                                                       Geometry_Properties = "AREA",
+                                                       Length_Unit = "METERS",
+                                                       Area_Unit = "SQUARE_METERS")
+                
+                # Perimeter
+                arcpy$AddGeometryAttributes_management(Input_Features = "watershed_summaries_temp",
+                                                       Geometry_Properties = "PERIMETER_LENGTH_GEODESIC",
+                                                       Length_Unit = "METERS",
+                                                       Area_Unit = "SQUARE_METERS")
     
-    # Merge basin info with the other stream properties
-    for (basin.id in as.character(unique(huc.8.boundaries$HUC_8))) {
-      
-      temp.df <- read.dbf(paste0(relative.path, "temporary-shapefiles/", basin.id, "_pour_point_id.dbf"))
-      
-      # Identify min elevation and max strahler
-      temp.df <- temp.df[temp.df$RASTERVALU == min(temp.df$RASTERVALU),  ]
-      temp.df <- temp.df[temp.df$Strahler == max(temp.df$Strahler),  ]
-      basin.df[basin.df$HUC_8 == basin.id, c("PourStream", "PourElevation")] <- temp.df[, c("StreamID", "RASTERVALU")]
-      
-    }
+                # Basin Length
+                watershed.temp <- as.character(arcpy$TableSelect_analysis(in_table = "watershed_boundary", 
+                                                                          out_table = "watershed_boundary_temp.shp"))
+                
+                huc.8.boundaries  <- read.dbf(watershed.temp)
+                
+                # Double check this is working properly
+
+                for (basin.id in as.character(unique(huc.8.boundaries$HUC_8))) {
+                        
+                        arcpy$Select_analysis(in_features = "watershed_boundary",
+                                              out_feature_class = paste0("watershed_temp_", basin.id),
+                                              where_clause = paste0("\"HUC_8\" IN ('", basin.id, "')"))
+                        
+                        arcpy$Dissolve_management(in_features = paste0("watershed_temp_", basin.id), 
+                                                  out_feature_class = paste0("watershed_dissolve_temp_", basin.id), 
+                                                  dissolve_field = "HUC_8")
+                        
+                        arcpy$Intersect_analysis(in_features = paste("StreamSeg", paste0("watershed_dissolve_temp_", basin.id), sep = ";"), 
+                                                 out_feature_class = paste0("pour_point_temp_", basin.id),
+                                                 join_attributes = "ALL", 
+                                                 output_type = "POINT")
+                        
+                        arcpy$FeatureToPoint_management(in_features = paste0("pour_point_temp_", basin.id), 
+                                                        out_feature_class = paste0("pour_point_single_temp_", basin.id))
+                        
+                        arcpy$sa$ExtractValuesToPoints(in_point_features = paste0("pour_point_single_temp_", basin.id),
+                                                       in_raster = DEM,
+                                                       out_point_features = paste0("pour_point_elevation_temp_", basin.id),
+                                                       interpolate_values = "NONE")
+                        
+                        arcpy$SpatialJoin_analysis(target_features = paste0("pour_point_elevation_temp_", basin.id),
+                                                   join_features = "StreamSeg",
+                                                   out_feature_class = paste0("pour_point_id_temp_", basin.id),
+                                                   join_operation = "JOIN_ONE_TO_ONE", 
+                                                   match_option = "WITHIN_A_DISTANCE_GEODESIC",
+                                                   search_radius = "1 Meters")
+
+                }
     
-    # Add the Feature type, and watershed properties
-    arcpy$SpatialJoin_analysis(target_features =paste0(relative.path, "temporary-shapefiles/Confluence_Elevation.shp"),
-                               join_features = paste0(relative.path, "temporary-shapefiles/watershed_summaries.shp"),
-                               out_feature_class = paste0(relative.path, "temporary-shapefiles/Segment_temp.shp"),
-                               join_operation = "JOIN_ONE_TO_ONE")
+                # Delete the temp file
+                arcpy$Delete_management(watershed.temp)
+
+                #################################
+                # Creation on final data frames #
+                #################################
+
+                # Alignment of culvert point attributes
+                att.type <- c("SlopePoint", "MAP", "Eref")
+                
+                for (att.id in 1:length(att.type)) {
+                        
+                        # Create temporary file for reading in table
+                        attribute.temp <- as.character(arcpy$TableSelect_analysis(in_table = paste0(att.type[att.id], "_temp"), 
+                                                                                  out_table = paste0(att.type[att.id], "_temp.shp")))
+                        
+                        culvert.attribute  <- read.dbf(attribute.temp)
+                        
+                        if(att.id == 1) {
+                                
+                                culvert.df <- data.frame(InterID = culvert.attribute$InterID,
+                                                         Attribute = culvert.attribute$RASTERVALU)
+                                colnames(culvert.df)[2] <- att.type[att.id]
+                                
+                        } else {
+                                
+                                culvert.attribute <- culvert.attribute[, c("InterID", "RASTERVALU")]
+                                colnames(culvert.attribute)[2] <- att.type[att.id]
+                                culvert.df <- merge.data.frame(culvert.df, culvert.attribute, by = "InterID")
+                                
+                        }
+                        
+                        # Delete the temp file
+                        rm(culvert.attribute)
+                        arcpy$Delete_management(attribute.temp)
+                        
+                }
     
-    # Edges
-    stream.edges <- read.dbf(paste0(relative.path, "temporary-shapefiles/Segment_temp.dbf"))
+                # Rename to to allow proper matching between files
+                colnames(culvert.df)[1] <- "TARGET_FID"
+                
+                ################
+                # Node summary #
+                ################
+                
+                # Create temporary file for reading in table
+                node.temp <- as.character(arcpy$TableSelect_analysis(in_table = "StreamSeg", 
+                                                                     out_table = "StreamSeg.shp"))
+                
+                node.data  <- read.dbf(node.temp)
+                node.data <- data.frame(Stream = node.data$StreamID,
+                                        SectionLength = node.data$LENGTH,
+                                        Watershed = rep(HUC, nrow(node.data)),
+                                        StreamType = node.data$StrmType,
+                                        HabitatType = node.data$Strahler,
+                                        HabitatQuality = rep(1, nrow(node.data)))
+                
+                # Remove temporary file
+                arcpy$Delete_management(node.temp)
+                
+                ################
+                # Edge summary #
+                ################
     
-    # Merge the basin info
-    stream.edges <- merge.data.frame(stream.edges, basin.df, by = "HUC_8")
+                basin.df <- data.frame(HUC_8 = as.character(unique(huc.8.boundaries$HUC_8)),
+                                       PourStream = NA,
+                                       PourElevation = NA)
+                
+                # Merge basin info with the other stream properties
+                for (basin.id in as.character(unique(huc.8.boundaries$HUC_8))) {
+                        
+                        # Create temporary file for reading in table
+                        basin.temp <- as.character(arcpy$TableSelect_analysis(in_table = paste0("pour_point_id_temp_", basin.id), 
+                                                                             out_table = paste0(basin.id, "_pour_point_id.shp")))
+                        
+                        temp.df <- read.dbf(basin.temp)
+                        
+                        # Identify min elevation and max strahler (represents the lowlest pour point)
+                        temp.df <- temp.df[temp.df$RASTERVALU == min(temp.df$RASTERVALU),  ]
+                        temp.df <- temp.df[temp.df$Strahler == max(temp.df$Strahler),  ]
+                        basin.df[basin.df$HUC_8 == basin.id, c("PourStream", "PourElevation")] <- temp.df[, c("StreamID", "RASTERVALU")]
+                        
+                        # Remove temporary file
+                        arcpy$Delete_management(basin.temp)
+                }
     
-    # Format data set
-    stream.edges <- data.frame(
-      TARGET_FID = as.numeric(as.character(stream.edges$InterID)),
-      StreamID_1 = stream.edges$StreamID, # Downstream segment
-      StreamID_2 = stream.edges$StreamID_1, # Upstream segment
-      Strahler = stream.edges$Strahler,
-      Elevation = stream.edges$RASTERVALU,
-      WatershedArea = stream.edges$POLY_AREA,
-      WatershedPerm = stream.edges$PERIM_GEO,
-      PourStream = stream.edges$PourStream,
-      PourElevation = stream.edges$PourElevation
-    )
+                # Add the Feature type, and watershed properties
+                arcpy$SpatialJoin_analysis(target_features = "Elevation_temp",
+                                           join_features = "watershed_summaries_temp",
+                                           out_feature_class = "Segment_temp",
+                                           join_operation = "JOIN_ONE_TO_ONE")
+                
+                # Create temporary file for reading in table
+                edge.temp <- as.character(arcpy$TableSelect_analysis(in_table = "Segment_temp", 
+                                                                      out_table = "Segment_temp.shp"))
     
-    # If there is no elevation value, set to NA
-    stream.edges$Elevation[stream.edges$Elevation == -9999] <- NA
+                # Edges
+                stream.edges <- read.dbf(edge.temp)
+                
+                # Remove temporary file
+                arcpy$Delete_management(edge.temp)
     
-    stream.edges$Class <- ifelse(is.element(stream.edges$TARGET_FID, culvert.df$TARGET_FID), "Culvert", "Split")
-    stream.edges$Node <- paste0(stream.edges$StreamID_1, "-", stream.edges$StreamID_2)
-    stream.edges$Up <- ifelse(stream.edges$Class == "Split", 1, NA)
-    stream.edges <- merge(stream.edges, culvert.df, by = "TARGET_FID", all = TRUE)
+                # Merge the basin info
+                stream.edges <- merge.data.frame(stream.edges, basin.df, by = "HUC_8")
+                
+                # Format data set
+                stream.edges <- data.frame(TARGET_FID = as.numeric(as.character(stream.edges$InterID)),
+                                           StreamID_1 = stream.edges$StreamID, # Downstream segment
+                                           StreamID_2 = stream.edges$StreamID_1, # Upstream segment
+                                           Strahler = stream.edges$Strahler,
+                                           Elevation = stream.edges$RASTERVALU,
+                                           WatershedArea = stream.edges$POLY_AREA,
+                                           WatershedPerm = stream.edges$PERIM_GEO,
+                                           PourStream = stream.edges$PourStream,
+                                           PourElevation = stream.edges$PourElevation)
     
-    # Correct culverts that are actually bridges and add the date of construction/survey
-    # Access Layer Road
-    bridges.df <- read.dbf(paste0(relative.path, "RoadBridges.dbf"))
-    bridges.df <- bridges.df[!is.na(bridges.df$OBJECTID_2), ]
-    bridges.df <- bridges.df[, c("InterID", "GEO_DATE")]
+                # If there is no elevation value, set to NA
+                stream.edges$Elevation[stream.edges$Elevation == -9999] <- NA
+                
+                # Identify which stream segments are culverts or natural splits
+                stream.edges$Class <- ifelse(is.element(stream.edges$TARGET_FID, culvert.df$TARGET_FID), "Culvert", "Split")
+                stream.edges$Node <- paste0(stream.edges$StreamID_1, "-", stream.edges$StreamID_2)
+                stream.edges$Up <- ifelse(stream.edges$Class == "Split", 1, NA)
+                stream.edges <- merge(stream.edges, culvert.df, by = "TARGET_FID", all = TRUE)
     
-    stream.edges$BridgeDate <- NA
-    stream.edges$Class[match(bridges.df$InterID, stream.edges$TARGET_FID, nomatch = 0)] <- "Bridge"
-    stream.edges$BridgeDate[match(bridges.df$InterID, stream.edges$TARGET_FID)] <- 2010 # Assuming 2010
+                # Correct culverts that are actually bridges and add the date of construction/survey
+                
+                # Access Layer Road bridges
+                # Create temporary file for reading in table
+                bridge.temp <- as.character(arcpy$TableSelect_analysis(in_table = "NPRoadBridges", 
+                                                                       out_table = "NPRoadBridges.shp"))
+                bridges.df <- read.dbf(bridge.temp)
+                bridges.df <- bridges.df[!is.na(bridges.df$GEO_DATE), ]
+                bridges.df <- bridges.df[, c("InterID", "GEO_DATE")]
+                
+                stream.edges$BridgeDate <- NA
+                stream.edges$Class[match(bridges.df$InterID, stream.edges$TARGET_FID, nomatch = 0)] <- "Bridge"
+                stream.edges$BridgeDate[match(bridges.df$InterID, stream.edges$TARGET_FID)] <- 2010 # Assuming 2010
+                
+                # Remove temporary file
+                arcpy$Delete_management(bridge.temp)
+                
+                # Access Layer Rail bridges
+                # Create temporary file for reading in table
+                bridge.temp <- as.character(arcpy$TableSelect_analysis(in_table = "NPRailBridges", 
+                                                                       out_table = "NPRailBridges.shp"))
+                bridges.df <- read.dbf(bridge.temp)
+                bridges.df <- bridges.df[!is.na(bridges.df$GEO_DATE), ]
+                bridges.df <- bridges.df[, c("InterID", "GEO_DATE")]
+                
+                stream.edges$Class[match(bridges.df$InterID, stream.edges$TARGET_FID, nomatch = 0)] <- "Bridge"
+                stream.edges$BridgeDate[match(bridges.df$InterID, stream.edges$TARGET_FID)] <- 2010 # Assuming 2010
+                
+                # Remove temporary file
+                arcpy$Delete_management(bridge.temp)
     
-    # Access Layer Rail
-    bridges.df <- read.dbf(paste0(relative.path, "RailBridges.dbf"))
-    bridges.df <- bridges.df[!is.na(bridges.df$OBJECTID_2), ]
-    bridges.df <- bridges.df[, c("InterID", "GEO_DATE")]
+                # Alberta Transportation
+                # Create temporary file for reading in table
+                bridge.temp <- as.character(arcpy$TableSelect_analysis(in_table = "ATBridges", 
+                                                                       out_table = "ATBridges.shp"))
+                bridges.df <- read.dbf(bridge.temp)
+                bridges.df <- bridges.df[bridges.df$STRUCTURE1 %in% c("STANDARD BRIDGE", "MAJOR BRIDGE"), ] # Bridges
+                bridges.df <- bridges.df[bridges.df$STRUCTURE2 %in% c("IN SERVICE"), ] # In service
+                bridges.df <- bridges.df[, c("InterID", "FIRST_IN_S")]
+                
+                stream.edges$Class[match(bridges.df$InterID, stream.edges$TARGET_FID, nomatch = 0)] <- "Bridge"
+                stream.edges$BridgeDate[match(bridges.df$InterID, stream.edges$TARGET_FID)] <- as.character(bridges.df$FIRST_IN_S)
+                
+                # Remove temporary file
+                arcpy$Delete_management(bridge.temp)
     
-    stream.edges$Class[match(bridges.df$InterID, stream.edges$TARGET_FID, nomatch = 0)] <- "Bridge"
-    stream.edges$BridgeDate[match(bridges.df$InterID, stream.edges$TARGET_FID)] <- 2010 # Assuming 2010
+                # Add dam information
+                # Create temporary file for reading in table
+                dam.temp <- as.character(arcpy$TableSelect_analysis(in_table = "Dams", 
+                                                                       out_table = "Dams.shp"))
+                dam.df <- read.dbf(dam.temp)
+                dam.df <- dam.df[!is.na(dam.df$ASSET_TYPE), ]
+                
+                stream.edges$Dam <- stream.edges$DamType <- stream.edges$DamStatus <- NA
+                stream.edges$Dam[match(dam.df$InterID, stream.edges$TARGET_FID, nomatch = 0)] <- "Dam"
+                stream.edges$DamType[match(dam.df$InterID, stream.edges$TARGET_FID)] <- as.character(dam.df$PURPOSE)
+                stream.edges$DamStatus[match(dam.df$InterID, stream.edges$TARGET_FID)] <- as.character(dam.df$STATUS)
+                
+                # Remove temporary file
+                arcpy$Delete_management(dam.temp)
     
-    # Alberta Transportation
-    bridges.df <- read.dbf(paste0(relative.path, "ATBridges.dbf"))
-    bridges.df <- bridges.df[bridges.df$STRUCTURE1 %in% c("STANDARD BRIDGE", "MAJOR BRIDGE"), ] # Bridges
-    bridges.df <- bridges.df[bridges.df$STRUCTURE2 %in% c("IN SERVICE"), ] # In service
-    bridges.df <- bridges.df[, c("InterID", "FIRST_IN_S")]
+                # Correct culverts that fall within the mineable region
+                # Create temporary file for reading in table
+                mineable.temp <- as.character(arcpy$TableSelect_analysis(in_table = "IntersectMineable", 
+                                                                    out_table = "IntersectMineable.shp"))
+                mineable.df <- read.dbf(mineable.temp)
+                stream.edges["MineableRegion"] <- NA
+                stream.edges$MineableRegion <- ifelse(stream.edges$TARGET_FID %in% mineable.df$InterID, "Inside", "Outside")
+                
+                # Remove temporary file
+                arcpy$Delete_management(mineable.temp)
     
-    stream.edges$Class[match(bridges.df$InterID, stream.edges$TARGET_FID, nomatch = 0)] <- "Bridge"
-    stream.edges$BridgeDate[match(bridges.df$InterID, stream.edges$TARGET_FID)] <- as.character(bridges.df$FIRST_IN_S)
+                # Create the final data frame
+                edge.data <- data.frame(TARGET_FID = stream.edges$TARGET_FID,
+                                        Node = stream.edges$Node,
+                                        UpstreamSeg = stream.edges$StreamID_2,
+                                        DownstreamSeg = stream.edges$StreamID_1,
+                                        Up = rep(1, nrow(stream.edges)),
+                                        Down = rep(1, nrow(stream.edges)),
+                                        Class = stream.edges$Class,
+                                        BridgeDate = stream.edges$BridgeDate,
+                                        Dam = stream.edges$Dam,
+                                        DamStatus = stream.edges$DamStatus,
+                                        DamType = stream.edges$DamType,
+                                        Mineable = stream.edges$MineableRegion, 
+                                        SlopePoint = stream.edges$SlopePoint,
+                                        MAP = stream.edges$MAP,
+                                        Eref = stream.edges$Eref,
+                                        Elevation = stream.edges$Elevation,
+                                        WatershedPerm = stream.edges$WatershedPerm,
+                                        WatershedArea = stream.edges$WatershedArea,
+                                        PourStream = stream.edges$PourStream,
+                                        PourElevation = stream.edges$PourElevation)
     
-    # Add dam information
-    dam.df <- read.dbf(paste0(relative.path, "Dams.dbf"))
-    dam.df <- dam.df[!is.na(dam.df$ASSET_TYPE), ]
-    
-    stream.edges$Dam <- stream.edges$DamType <- stream.edges$DamStatus <- NA
-    stream.edges$Dam[match(dam.df$InterID, stream.edges$TARGET_FID, nomatch = 0)] <- "Dam"
-    stream.edges$DamType[match(dam.df$InterID, stream.edges$TARGET_FID)] <- as.character(dam.df$PURPOSE)
-    stream.edges$DamStatus[match(dam.df$InterID, stream.edges$TARGET_FID)] <- as.character(dam.df$STATUS)
-    
-    # Add road/rail feature type
-    features.df <- read.dbf(paste0(relative.path, "RoadBridges.dbf"))
-    stream.edges$FeatureType <- NA
-    stream.edges$FeatureType[match(features.df$InterID, stream.edges$TARGET_FID, nomatch = 0)] <- as.character(features.df$FEATURE__2)
-    
-    # Correct culverts that fall within the minable region
-    minable.df <- read.dbf(paste(relative.path, "IntersectMinable.dbf", sep = ""))
-    stream.edges["MinableRegion"] <- NA
-    stream.edges$MinableRegion <- ifelse(stream.edges$TARGET_FID %in% minable.df$InterID, "Inside", "Outside")
-    
-    edge.data.ref <- data.frame(
-      TARGET_FID = stream.edges$TARGET_FID,
-      Node = stream.edges$Node,
-      UpstreamSeg = stream.edges$StreamID_2,
-      DownstreamSeg = stream.edges$StreamID_1,
-      Up = rep(1, nrow(stream.edges)),
-      Down = rep(1, nrow(stream.edges)),
-      Class = stream.edges$Class,
-      BridgeDate = stream.edges$BridgeDate,
-      Dam = stream.edges$Dam,
-      DamStatus = stream.edges$DamStatus,
-      DamType = stream.edges$DamType,
-      FeatureType = stream.edges$FeatureType,
-      Mineable = stream.edges$MinableRegion, 
-      TWI_Point = stream.edges$TWI_Point,
-      Slope_Point = stream.edges$Slope_Point,
-      TPI_Point = stream.edges$TPI_Point,
-      VBF_Point = stream.edges$VBF_Point,
-      HAND_Point = stream.edges$HAND_Point,
-      MAP_Point = stream.edges$MAP_Point,
-      FFP_Point = stream.edges$FFP_Point,
-      Eref_Point = stream.edges$Eref_Point,
-      AHM_Point = stream.edges$AHM_Point,
-      Elevation = stream.edges$Elevation,
-      WatershedPerm = stream.edges$WatershedPerm,
-      WatershedArea = stream.edges$WatershedArea,
-      PourStream = stream.edges$PourStream,
-      PourElevation = stream.edges$PourElevation
-    )
-    
-    # Create reach network
-    node.reach  <- read.dbf(paste0(relative.path, "StreamReach.dbf"))
-    
-    # Nodes
-    node.reach <- data.frame(
-      Stream = node.reach$REACHID,
-      SectionLength = node.reach$LENGTH,
-      Watershed = rep(HUC, nrow(node.reach)),
-      StreamType = node.reach$StrmType,
-      HabitatType = node.reach$Strahler,
-      HabitatQuality = rep(1, nrow(node.reach))
-    )
-    
-    # Edges
-    edge.reach <- read.dbf(paste0(relative.path, "AllReachConnections.dbf"))
-    
-    # Format data set
-    edge.reach <- data.frame(
-      TARGET_FID = as.numeric(as.character(edge.reach$PointID)),
-      Culvert_Match = as.numeric(as.character(edge.reach$InterID)),
-      Reach_Match = as.numeric(as.character(edge.reach$InterID)),
-      Node = paste0(edge.reach$REACHID_1, "-", edge.reach$REACHID),
-      UpstreamSeg = edge.reach$REACHID_1, # Upstream segment
-      DownstreamSeg = edge.reach$REACHID, # Downstream segment
-      Class = edge.reach$FEATURE_TY, 
-      Elevation = edge.reach$RASTERVALU
-    )
-    
-    # Replace Culver with Culvert
-    edge.reach$Class <- gsub("Culver", "Culvert", edge.reach$Class)
-    
-    # Remove the culvert match value if not a culvert
-    edge.reach$Culvert_Match[edge.reach$Class != "Culvert"] <- NA
-    
-    # If there is no elevation value, set to NA
-    edge.reach$Elevation[edge.reach$Elevation == -9999] <- NA
-    
-  }
+        }
   
-  ############
-  # Clean up #
-  ############
-  
-  do.call(file.remove, list(list.files(paste0(relative.path, "temporary-databases/"), full.names = TRUE)))
-  do.call(file.remove, list(list.files(paste0(relative.path, "temporary-shapefiles/"), full.names = TRUE)))
-  
-  return(list(node.data, edge.data.ref, node.reach, edge.reach))
+        ############
+        # Clean up #
+        ############
+        
+        temp.layers <- arcpy$ListFeatureClasses()
+        temp.layers <- temp.layers[grep("_temp", temp.layers)]
+        arcpy$Delete_management(in_data = temp.layers)
+        
+        return(list(Node = node.data, 
+                    Edge = edge.data))
   
 }
 
