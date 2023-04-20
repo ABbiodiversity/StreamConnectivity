@@ -42,8 +42,8 @@ arcpy <- import('arcpy')
 arcpy$env$parallelProcessingFactor <- "100%"
 
 # Create the appropriate linear feature subsets using the three HUC scales of interest
-huc.scales <- c(6, 8, 10) # Define HUC scales
-hfi.years <- c(2010, 2014, 2016, 2018) # Define HFI years
+huc.scales <- c(6) # Define HUC scales
+hfi.years <- c(2010, 2018) # Define HFI years
 
 for (huc.unit in huc.scales) {
         
@@ -78,9 +78,9 @@ for (huc.unit in huc.scales) {
                                                                 dam.layer = paste0(getwd(), "/data/base/gis/dams/Alberta_Dams_3400_2021-05-11.shp"), 
                                                                 mineable.boundary = paste0(getwd(), "/data/base/gis/minable/MINEABLE_OIL_SANDS_SCHEME_APPROVALS_MASTER_1.shp"),
                                                                 Slope = paste0(getwd(), "/data/base/gis/topographic/Slope_LiDAR.tif"),
-                                                                DEM = paste0(getwd(), "/data/base/gis/topographic/GEE_srtm_mosaic/srtm.tif"), 
-                                                                MAP = paste0(getwd(), "/data/base/gis/climate/MAP.asc"), 
-                                                                Eref = paste0(getwd(), "/data/base/gis/climate/Eref.asc"),
+                                                                DEM = paste0(getwd(), "/data/base/gis/topographic/ALOS/DEM.tif"), 
+                                                                MAP = paste0(getwd(), "/data/base/gis/climate/MAP.tif"), 
+                                                                Eref = paste0(getwd(), "/data/base/gis/climate/Eref.tif"),
                                                                 AT.bridges = paste0(getwd(), "/data/base/gis/bridges/alberta-transportation/Bridges-20m-3400_2019.shp"), 
                                                                 NP.rail.bridges = paste0(getwd(), "/data/base/gis/bridges/access-layer/railway-bridges-np-20m_2020.shp"),
                                                                 NP.road.bridges = paste0(getwd(), "/data/base/gis/bridges/access-layer/road-bridges-np-20m_2020.shp"),
@@ -94,7 +94,7 @@ for (huc.unit in huc.scales) {
                         
                 }
                 
-                print(hfi)
+                print(hfi.year)
                 
         }
         

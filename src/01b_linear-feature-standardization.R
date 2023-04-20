@@ -42,8 +42,8 @@ arcpy <- import('arcpy')
 arcpy$env$parallelProcessingFactor <- "100%"
 
 # Create the appropriate linear feature subsets using the three HUC scales of interest
-huc.scales <- c(6, 8, 10) # Define HUC scales
-hfi.years <- c(2010, 2014, 2016, 2018) # Define HFI years
+huc.scales <- c(6) # Define HUC scales (6,8,10)
+hfi.years <- c(2010, 2018) # Define HFI years (2010, 2014, 2016, 2018)
 
 for (huc.unit in huc.scales) {
         

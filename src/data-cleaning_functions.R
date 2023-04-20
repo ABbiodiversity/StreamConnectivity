@@ -396,7 +396,7 @@ def autoIncrement():
                 # Delete the temp file
                 arcpy$Delete_management(streamseg.temp)
                 
-                return(list(node.data))
+                return(list(Node = node.data))
                 
         } else {
                 
@@ -617,10 +617,10 @@ def autoIncrement():
                         
                         temp.df <- read.dbf(basin.temp)
                         
-                        # Identify min elevation and max strahler (represents the lowlest pour point)
+                        # Identify min elevation and max strahler (represents the lowest pour point)
                         temp.df <- temp.df[temp.df$RASTERVALU == min(temp.df$RASTERVALU),  ]
                         temp.df <- temp.df[temp.df$Strahler == max(temp.df$Strahler),  ]
-                        basin.df[basin.df$HUC_8 == basin.id, c("PourStream", "PourElevation")] <- temp.df[, c("StreamID", "RASTERVALU")]
+                        basin.df[basin.df$HUC_8 == basin.id, c("PourStream", "PourElevation")] <- temp.df[1, c("StreamID", "RASTERVALU")]
                         
                         # Remove temporary file
                         arcpy$Delete_management(basin.temp)
@@ -643,7 +643,7 @@ def autoIncrement():
                 arcpy$Delete_management(edge.temp)
     
                 # Merge the basin info
-                stream.edges <- merge.data.frame(stream.edges, basin.df, by = "HUC_8")
+                stream.edges <- merge.data.frame(stream.edges, basin.df, by = "HUC_8", all = TRUE)
                 
                 # Format data set
                 stream.edges <- data.frame(TARGET_FID = as.numeric(as.character(stream.edges$InterID)),
@@ -780,199 +780,199 @@ def autoIncrement():
 
 stream_slope <- function(culvert.id, culvert.list, node.data, edge.data, slope.type) {
   
-  # Identify focal culvert and neighbouring segments
-  focal.culvert <- culvert.list[culvert.list$TARGET_FID == culvert.id, ]
-  upstream.segment <- focal.culvert$UpstreamSeg
-  downstream.segment <- focal.culvert$DownstreamSeg
-  
-  # Add lengths together
-  total.length <- sum(node.data[node.data$Stream %in% c(upstream.segment, downstream.segment), "SectionLength"])
-  
-  # Upstream check
-  # Define false flag so while statement will continue until objective is met
-  upstream.check <- FALSE
-  previous.node <- focal.culvert$Node # Define the previous node visited so we can remove it
-
-  while(upstream.check == FALSE) {
-    
-    # Identify segments directly upstream*
-    edge.upstream <- edge.data[edge.data$UpstreamSeg == upstream.segment | edge.data$DownstreamSeg == upstream.segment, ]
-    
-    # Remove the previous node
-    edge.upstream <- edge.upstream[edge.upstream$Node != previous.node, ]
-    
-    if(nrow(edge.upstream) == 1){
-      
-      # Check if it is the start of a network
-      if(edge.upstream$UpstreamSeg == edge.upstream$DownstreamSeg) {
+        # Identify focal culvert and neighbouring segments
+        focal.culvert <- culvert.list[culvert.list$TARGET_FID == culvert.id, ]
+        upstream.segment <- focal.culvert$UpstreamSeg
+        downstream.segment <- focal.culvert$DownstreamSeg
         
-        upstream.elevation <- edge.upstream$Elevation
-        upstream.check <- TRUE
+        # Add lengths together
+        total.length <- sum(node.data[node.data$Stream %in% c(upstream.segment, downstream.segment), "SectionLength"])
         
-      } else {
+        # Upstream check
+        # Define false flag so while statement will continue until objective is met
+        upstream.check <- FALSE
+        previous.node <- focal.culvert$Node # Define the previous node visited so we can remove it
         
-        # As we can't confirm upstream/downstream via the value, identify the value that does not equal the current downstream* value
-        if(edge.upstream$UpstreamSeg != upstream.segment) {
-          
-          upstream.segment <- edge.upstream$UpstreamSeg
-          
-        } else {
-          
-          upstream.segment <- edge.upstream$DownstreamSeg
-          
+        while(upstream.check == FALSE) {
+                
+                # Identify segments directly upstream
+                edge.upstream <- edge.data[edge.data$UpstreamSeg == upstream.segment | edge.data$DownstreamSeg == upstream.segment, ]
+                
+                # Remove the previous node
+                edge.upstream <- edge.upstream[edge.upstream$Node != previous.node, ]
+                
+                if(nrow(edge.upstream) == 1){
+                        
+                        # Check if it is the start of a network
+                        if(edge.upstream$UpstreamSeg == edge.upstream$DownstreamSeg) {
+                                
+                                upstream.elevation <- edge.upstream$Elevation
+                                upstream.check <- TRUE
+                                
+                        } else {
+                                
+                                # As we can't confirm upstream/downstream via the value, identify the value that does not equal the current downstream* value
+                                if(edge.upstream$UpstreamSeg != upstream.segment) {
+                                        
+                                        upstream.segment <- edge.upstream$UpstreamSeg
+                                        
+                                } else {
+                                        
+                                        upstream.segment <- edge.upstream$DownstreamSeg
+                                        
+                                }
+                                
+                                # Check if stream segment connects to like habitat (lake, strahler order)
+                                strm.seg <- node.data[node.data$Stream %in% upstream.segment, ]
+                                habitat.match <- node.data[node.data$Stream %in% c(edge.upstream$UpstreamSeg, edge.upstream$DownstreamSeg), "HabitatType"]
+                                
+                                if(habitat.match[1] != habitat.match[2]) {
+                                        
+                                        # Pull out the elevation information and stop
+                                        upstream.elevation <- edge.upstream$Elevation
+                                        upstream.check <- TRUE   
+                                        
+                                } else {
+                                        
+                                        if(slope.type == "Reach") {
+                                                
+                                                if(edge.upstream$Reach_Match == focal.culvert$Culvert_Match) {
+                                                        
+                                                        # Pull out the elevation information and stop
+                                                        upstream.elevation <- edge.upstream$Elevation
+                                                        upstream.check <- TRUE  
+                                                        
+                                                } else {
+                                                        
+                                                        # Define add length of new segment and update previous node
+                                                        total.length <- total.length + strm.seg$SectionLength
+                                                        previous.node <- edge.upstream$Node
+                                                        
+                                                }
+                                                
+                                        }
+                                        
+                                        if(slope.type == "Confluence") {
+                                                
+                                                # Define add length of new segment and update previous node
+                                                total.length <- total.length + strm.seg$SectionLength
+                                                previous.node <- edge.upstream$Node
+                                                
+                                        }
+                                        
+                                        
+                                }
+                                
+                        }
+                } 
+                
+                # Check if it is a confluence bound
+                if(nrow(edge.upstream) > 1) {
+                        
+                        # Take the mean elevation value at the location
+                        upstream.elevation <- mean(edge.upstream$Elevation)
+                        upstream.check <- TRUE
+                        
+                }
+                
+                
         }
         
-        # Check if stream segment connects to like habitat (lake, strahler order)
-        strm.seg <- node.data[node.data$Stream %in% upstream.segment, ]
-        habitat.match <- node.data[node.data$Stream %in% c(edge.upstream$UpstreamSeg, edge.upstream$DownstreamSeg), "HabitatType"]
+        # Downstream check
+        # Define false flag so while statement will continue until objective is met
+        downstream.check <- FALSE
+        previous.node <- focal.culvert$Node # Define the previous node visited so we can remove it
         
-        if(habitat.match[1] != habitat.match[2]) {
-          
-          # Pull out the elevation information and stop
-          upstream.elevation <- edge.upstream$Elevation
-          upstream.check <- TRUE   
-          
-        } else {
-          
-          if(slope.type == "Reach") {
-            
-            if(edge.upstream$Reach_Match == focal.culvert$Culvert_Match) {
-              
-              # Pull out the elevation information and stop
-              upstream.elevation <- edge.upstream$Elevation
-              upstream.check <- TRUE  
-              
-            } else {
-              
-              # Define add length of new segment and update previous node
-              total.length <- total.length + strm.seg$SectionLength
-              previous.node <- edge.upstream$Node
-              
-            }
-            
-          }
-          
-          if(slope.type == "Confluence") {
-            
-            # Define add length of new segment and update previous node
-            total.length <- total.length + strm.seg$SectionLength
-            previous.node <- edge.upstream$Node
-            
-          }
-          
-          
+        while(downstream.check == FALSE) {
+                
+                # Identify segments directly downstream*
+                edge.downstream <- edge.data[edge.data$UpstreamSeg == downstream.segment | edge.data$DownstreamSeg == downstream.segment, ]
+                
+                # Remove the previous node
+                edge.downstream <- edge.downstream[edge.downstream$Node != previous.node, ]
+                
+                if(nrow(edge.downstream) == 1){
+                        
+                        # Check if it is the start of a network
+                        if(edge.downstream$UpstreamSeg == edge.downstream$DownstreamSeg) {
+                                
+                                downstream.elevation <- edge.downstream$Elevation
+                                downstream.check <- TRUE
+                                
+                        } else {
+                                
+                                # As we can't confirm upstream/downstream via the value, identify the value that does not equal the current downstream* value
+                                if(edge.downstream$UpstreamSeg != downstream.segment) {
+                                        
+                                        downstream.segment <- edge.downstream$UpstreamSeg
+                                        
+                                } else {
+                                        
+                                        downstream.segment <- edge.downstream$DownstreamSeg
+                                        
+                                }
+                                
+                                # Check if stream segment connects to like habitat (lake, strahler order)
+                                strm.seg <- node.data[node.data$Stream %in% downstream.segment, ]
+                                habitat.match <- node.data[node.data$Stream %in% c(edge.downstream$UpstreamSeg, edge.downstream$DownstreamSeg), "HabitatType"]
+                                
+                                if(habitat.match[1] != habitat.match[2]) {
+                                        
+                                        # Pull out the elevation information and stop
+                                        downstream.elevation <- edge.downstream$Elevation
+                                        downstream.check <- TRUE   
+                                        
+                                } else {
+                                        
+                                        if(slope.type == "Reach") {
+                                                
+                                                if(edge.downstream$Reach_Match == focal.culvert$Culvert_Match) {
+                                                        
+                                                        # Pull out the elevation information and stop
+                                                        downstream.elevation <- edge.downstream$Elevation
+                                                        downstream.check <- TRUE  
+                                                        
+                                                } else {
+                                                        
+                                                        # Define add length of new segment and update previous node
+                                                        total.length <- total.length + strm.seg$SectionLength
+                                                        previous.node <- edge.downstream$Node
+                                                        
+                                                }
+                                        }
+                                        
+                                        if (slope.type == "Confluence") {
+                                                
+                                                # Define add length of new segment and update previous node
+                                                total.length <- total.length + strm.seg$SectionLength
+                                                previous.node <- edge.downstream$Node
+                                                
+                                        }
+                                        
+                                }
+                                
+                        }
+                        
+                } 
+                
+                # Check if it is a confluence bound
+                if(nrow(edge.downstream) > 1) {
+                        
+                        # Take the mean elevation value at the location
+                        downstream.elevation <- mean(edge.downstream$Elevation)
+                        downstream.check <- TRUE
+                        
+                }
+                
         }
         
-      }
-    } 
-    
-    # Check if it is a confluence bound
-    if(nrow(edge.upstream) > 1) {
-      
-      # Take the mean elevation value at the location
-      upstream.elevation <- mean(edge.upstream$Elevation)
-      upstream.check <- TRUE
-      
-    }
-    
-    
-  }
-  
-  # Downstream check
-  # Define false flag so while statement will continue until objective is met
-  downstream.check <- FALSE
-  previous.node <- focal.culvert$Node # Define the previous node visited so we can remove it
-  
-  while(downstream.check == FALSE) {
-    
-    # Identify segments directly downstream*
-    edge.downstream <- edge.data[edge.data$UpstreamSeg == downstream.segment | edge.data$DownstreamSeg == downstream.segment, ]
-    
-    # Remove the previous node
-    edge.downstream <- edge.downstream[edge.downstream$Node != previous.node, ]
-    
-    if(nrow(edge.downstream) == 1){
-      
-      # Check if it is the start of a network
-      if(edge.downstream$UpstreamSeg == edge.downstream$DownstreamSeg) {
         
-        downstream.elevation <- edge.downstream$Elevation
-        downstream.check <- TRUE
+        # Return the results
+        return(ifelse(downstream.elevation >= upstream.elevation, 
+                      (downstream.elevation - upstream.elevation) / total.length,
+                      (upstream.elevation - downstream.elevation) / total.length))
         
-      } else {
         
-        # As we can't confirm upstream/downstream via the value, identify the value that does not equal the current downstream* value
-        if(edge.downstream$UpstreamSeg != downstream.segment) {
-           
-          downstream.segment <- edge.downstream$UpstreamSeg
-          
-        } else {
-          
-          downstream.segment <- edge.downstream$DownstreamSeg
-          
-        }
-        
-        # Check if stream segment connects to like habitat (lake, strahler order)
-        strm.seg <- node.data[node.data$Stream %in% downstream.segment, ]
-        habitat.match <- node.data[node.data$Stream %in% c(edge.downstream$UpstreamSeg, edge.downstream$DownstreamSeg), "HabitatType"]
-        
-        if(habitat.match[1] != habitat.match[2]) {
-          
-          # Pull out the elevation information and stop
-          downstream.elevation <- edge.downstream$Elevation
-          downstream.check <- TRUE   
-          
-        } else {
-          
-          if(slope.type == "Reach") {
-            
-            if(edge.downstream$Reach_Match == focal.culvert$Culvert_Match) {
-              
-              # Pull out the elevation information and stop
-              downstream.elevation <- edge.downstream$Elevation
-              downstream.check <- TRUE  
-              
-            } else {
-              
-              # Define add length of new segment and update previous node
-              total.length <- total.length + strm.seg$SectionLength
-              previous.node <- edge.downstream$Node
-              
-            }
-          }
-          
-          if (slope.type == "Confluence") {
-            
-            # Define add length of new segment and update previous node
-            total.length <- total.length + strm.seg$SectionLength
-            previous.node <- edge.downstream$Node
-            
-          }
-          
-        }
-        
-      }
-      
-    } 
-    
-    # Check if it is a confluence bound
-    if(nrow(edge.downstream) > 1) {
-      
-      # Take the mean elevation value at the location
-      downstream.elevation <- mean(edge.downstream$Elevation)
-      downstream.check <- TRUE
-      
-    }
-    
-  }
-  
-  
-  # Return the results
-  return(ifelse(downstream.elevation >= upstream.elevation, 
-                (downstream.elevation - upstream.elevation) / total.length,
-                (upstream.elevation - downstream.elevation) / total.length))
-  
-
 }
 
 #####################
