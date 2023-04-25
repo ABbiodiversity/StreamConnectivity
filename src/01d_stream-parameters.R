@@ -1,18 +1,80 @@
 #
 # Title: Calculating confluence bound slope, local stream slope, and upstream distance
 # Created: September 1st, 2021
-# Last Updated: March 31st, 2023
+# Last Updated: April 19th, 2023
 # Author: Brandon Allen
 # Objectives: Based on the network files that have been created, calculate the stream slopes and remove self intersecting points
-# Keywords: Notes, Stream Slope, Upstream Distance 
+# Keywords: Notes, Stream Repair, Stream Slope, Upstream Distance 
 #
 
 #########
 # Notes #
-#########~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#########~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 # 1) All paths defined in this script are local
 #
+#################
+# Stream Repair #
+#################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Clear memory
+rm(list=ls())
+gc()
+
+# There are three watersheds where the end point of a stream falls outside the watershed boundary. 
+# Manually repair this for the following watersheds (080304, 040306, 110403)
+
+# HUC 080304
+hfi.year <- c(2010, 2018)
+for (hfi in hfi.year) {
+        
+        # Load watershed
+        load(paste0("data/processed/huc-6/", hfi, "/connectivity/network_080304.Rdata"))
+        watershed.edge <- watershed.network[["Edge"]]
+        watershed.edge$WatershedPerm[watershed.edge$WatershedPerm == 0] <- watershed.edge$WatershedPerm[watershed.edge$Node == "5482-5482"]
+        watershed.edge$WatershedArea[watershed.edge$WatershedArea == 0] <- watershed.edge$WatershedArea[watershed.edge$Node == "5482-5482"]
+        watershed.edge$PourStream[is.na(watershed.edge$PourStream)] <- watershed.edge$PourStream[watershed.edge$Node == "5482-5482"]
+        watershed.edge$PourElevation[is.na(watershed.edge$PourElevation)] <- watershed.edge$PourElevation[watershed.edge$Node == "5482-5482"]
+        
+        watershed.network$Edge <- watershed.edge
+        save(watershed.edge, file = paste0("data/processed/huc-6/", hfi, "/connectivity/network_080304.Rdata"))
+        
+}
+
+# HUC 040306
+hfi.year <- c(2010, 2018)
+for (hfi in hfi.year) {
+        
+        # Load watershed
+        load(paste0("data/processed/huc-6/", hfi, "/connectivity/network_040306.Rdata"))
+        watershed.edge <- watershed.network[["Edge"]]
+        watershed.edge$WatershedPerm[watershed.edge$WatershedPerm == 0] <- watershed.edge$WatershedPerm[watershed.edge$Node == "1-2"]
+        watershed.edge$WatershedArea[watershed.edge$WatershedArea == 0] <- watershed.edge$WatershedArea[watershed.edge$Node == "1-2"]
+        watershed.edge$PourStream[is.na(watershed.edge$PourStream)] <- watershed.edge$PourStream[watershed.edge$Node == "1-2"]
+        watershed.edge$PourElevation[is.na(watershed.edge$PourElevation)] <- watershed.edge$PourElevation[watershed.edge$Node == "1-2"]
+        
+        watershed.network$Edge <- watershed.edge
+        save(watershed.edge, file = paste0("data/processed/huc-6/", hfi, "/connectivity/network_040306.Rdata"))
+        
+}
+
+# HUC 110403
+hfi.year <- c(2010, 2018)
+for (hfi in hfi.year) {
+        
+        # Load watershed
+        load(paste0("data/processed/huc-6/", hfi, "/connectivity/network_110403.Rdata"))
+        watershed.edge <- watershed.network[["Edge"]]
+        watershed.edge$WatershedPerm[watershed.edge$WatershedPerm == 0] <- watershed.edge$WatershedPerm[watershed.edge$Node == "40-40"]
+        watershed.edge$WatershedArea[watershed.edge$WatershedArea == 0] <- watershed.edge$WatershedArea[watershed.edge$Node == "40-40"]
+        watershed.edge$PourStream[is.na(watershed.edge$PourStream)] <- watershed.edge$PourStream[watershed.edge$Node == "40-40"]
+        watershed.edge$PourElevation[is.na(watershed.edge$PourElevation)] <- watershed.edge$PourElevation[watershed.edge$Node == "40-40"]
+        
+        watershed.network$Edge <- watershed.edge
+        save(watershed.edge, file = paste0("data/processed/huc-6/", hfi, "/connectivity/network_110403.Rdata"))
+        
+}
+
 ################
 # Stream Slope #
 ################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -41,6 +103,19 @@ for (watershed in watershed.name) {
         confluence.edge <- watershed.network[["Edge"]]
         confluence.node <- watershed.network[["Node"]]
         
+        # If a watershed does not have any culverts present, it is assumed 100% connected.
+        # Therefore, we can skip all watersheds where the "Edge" network is NULL
+        if(is.null(watershed.network[["Edge"]])) {
+                
+                # Update R object and save
+                watershed.network[["Edge_Cleaned"]] <- watershed.network$Edge
+                watershed.network[["Node_Cleaned"]] <- watershed.network$Node
+                save(watershed.network, file = watershed.path[grep(watershed, watershed.path)])
+                print(paste0("Confluence paramater assignment complete: ", watershed))
+                next()
+                
+        }
+        
         # If Upstream or Downstream segments == 0, make Upstream == Downstream
         confluence.edge$UpstreamSeg[confluence.edge$UpstreamSeg == 0] <- confluence.edge$DownstreamSeg[confluence.edge$UpstreamSeg == 0]
         confluence.edge$DownstreamSeg[confluence.edge$DownstreamSeg == 0] <- confluence.edge$UpstreamSeg[confluence.edge$DownstreamSeg == 0]
@@ -61,7 +136,6 @@ for (watershed in watershed.name) {
         confluence.node$HabitatType[confluence.node$StreamType == "LAKE PATH"]  <- -1
         
         # Loop through each culvert and calculate the gradient of the stream confluence
-        
         for (culvert.id in culvert.list$TARGET_FID) {
                 
                 confluence.edge$Confluence[confluence.edge$TARGET_FID == culvert.id] <- stream_slope(culvert.id = culvert.id, 
@@ -71,8 +145,6 @@ for (watershed in watershed.name) {
                                                                                                      slope.type = "Confluence")
                 
         }
-        
-        print(paste0("Confluence estimate complete: ", watershed), Sys.time())
         
         rm(culvert.list, culvert.id)
         
@@ -92,8 +164,6 @@ for (watershed in watershed.name) {
                                                                                          confluence.node[confluence.node$Stream %in% confluence.edge[confluence.edge$TARGET_FID == edge.id, "DownstreamSeg"], "HabitatType"]))
         }
         
-        print(paste0("Strahler assignment complete: ", watershed), Sys.time())
-        
         # Identify stream segments associated with each HUC 8. There may be instances of segments running into both, but 
         # this sound be a small total length.
         
@@ -105,15 +175,6 @@ for (watershed in watershed.name) {
                                confluence.edge[confluence.edge$WatershedPerm == basin, c("DownstreamSeg")]))
                 
                 confluence.edge$TotalLength[confluence.edge$WatershedPerm == basin] <- sum(confluence.node[confluence.node$Stream %in% temp.data, "SectionLength"])
-                
-        }
-        
-        # Correct the pour elevation as -9999 values exist
-        
-        for(watershed.id in unique(confluence.edge$WatershedArea)) {
-                
-                confluence.edge$Elevation[confluence.edge$WatershedArea == watershed.id & is.na(confluence.edge$Elevation)] <- mean(confluence.edge$Elevation[confluence.edge$WatershedArea == watershed.id & !is.na(confluence.edge$Elevation)], na.rm = TRUE)
-                confluence.edge$PourElevation[confluence.edge$WatershedArea == watershed.id & confluence.edge$PourElevation == -9999] <- min(confluence.edge$Elevation[confluence.edge$WatershedArea == watershed.id & confluence.edge$Elevation != -9999], na.rm = TRUE)
                 
         }
         
@@ -130,13 +191,12 @@ for (watershed in watershed.name) {
         confluence.edge$Compactness <- confluence.edge$WatershedPerm / (2 * sqrt(pi * confluence.edge$WatershedArea))
         confluence.edge$DrainageDensity <- confluence.edge$TotalLength / confluence.edge$WatershedArea
         
-        
-        print(paste0("Watershed characteristics complete: ", watershed), Sys.time())
-        
         # Update R object and save
         watershed.network[["Edge_Cleaned"]] <- confluence.edge
         watershed.network[["Node_Cleaned"]] <- confluence.node
         save(watershed.network, file = watershed.path[grep(watershed, watershed.path)])
+        
+        print(paste0("Confluence paramater assignment complete: ", watershed))
 
 }
 
@@ -160,7 +220,7 @@ source("src/connectivity-status_functions.R")
 watershed.path <- list.files(path = "data/processed/huc-6/2010/connectivity/", full.names = TRUE)
 watershed.name <- list.files(path = "data/processed/huc-6/2010/connectivity/", full.names = FALSE)
 
-for (watershed in edge.nwatershed.nameames) {
+for (watershed in watershed.name) {
         
         #####################
         # Upstream Distance #
@@ -173,6 +233,19 @@ for (watershed in edge.nwatershed.nameames) {
         edge.in <- watershed.network[["Edge_Cleaned"]]
         node.in <- watershed.network[["Node_Cleaned"]]
         
+        # If a watershed does not have any culverts present, it is assumed 100% connected.
+        # Therefore, we can skip all watersheds where the "Edge" network is NULL
+        if(is.null(watershed.network[["Edge_Cleaned"]])) {
+                
+                # Update R object and save
+                watershed.network[["Edge_Cleaned"]] <- watershed.network$Edge_Cleaned
+                watershed.network[["Node_Cleaned"]] <- watershed.network$Node_Cleaned
+                save(watershed.network, file = watershed.path[grep(watershed, watershed.path)])
+                print(paste0("Upstream assignment complete: ", watershed))
+                next()
+                
+        }
+        
         # Create the list of culverts to get estimates for
         culvert.list <- edge.in[edge.in$Class == "Culvert", ]
         
@@ -184,9 +257,6 @@ for (watershed in edge.nwatershed.nameames) {
         edge.in$UpstreamCulverts <- NA
         
         # Loop through each culvert and calculate the gradient of the stream confluence
-        
-        print(paste0("Upstream assignment start: ", Sys.time()))
-        
         for (culvert in culvert.list$TARGET_FID) {
                 
                 edge.in[edge.in$TARGET_FID == culvert, c("Distance", "UpstreamCulverts")] <- upstream_distance(culvert.id = culvert.list[culvert.list$TARGET_FID == culvert, "Node"],
@@ -195,7 +265,7 @@ for (watershed in edge.nwatershed.nameames) {
                 
         }
         
-        print(paste0("Upstream assignment complete: ", Sys.time()))
+        print(paste0("Upstream assignment complete: ", watershed))
         
         # Remove all self intersecting end points
         edge.in <- edge.in[edge.in$UpstreamSeg != edge.in$DownstreamSeg, ]
@@ -204,6 +274,8 @@ for (watershed in edge.nwatershed.nameames) {
         watershed.network[["Edge_Cleaned"]] <- edge.in
         save(watershed.network, file = watershed.path[grep(watershed, watershed.path)])
         
-        print(watershed)
-        
 }
+
+# Clear memory
+rm(list=ls())
+gc()
