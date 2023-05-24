@@ -1,151 +1,45 @@
 #
 # Title: Merging culvert results
 # Created: September 1st, 2021
-# Last Updated: September 1st, 2021
+# Last Updated: May 12th, 2021
 # Author: Brandon Allen
 # Objectives: Merging the predicted passability scores into a single file and merge with the appropriate shapefiles.
-# Keywords: Notes, Data Merging, Indicator Summarization, BMF Summarization
+# Keywords: Notes, Data Merging, Indicator Summary
 #
 
 #########
 # Notes #
-#########~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#########~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 # 1) All paths defined in this script are local
 #
 ################
-# Data Merging #
+# Data Merging # Need to think of a new way to merge the results with the geodatabases
 ################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# Clear memory
-rm(list=ls())
-gc()
-
-# Load Librarys
-library(foreign)
-library(rgdal)
-library(sf)
-
-# Define analysis year and list of folders to start the compilation from
-analysis.year <- 2010
-huc.unit <- 6
-
-huc.list <- list.dirs(paste0("results/tables/probability/huc-", huc.unit, "/", analysis.year), full.names = TRUE)
-huc.name <- list.dirs(paste0("results/tables/probability/huc-", huc.unit, "/", analysis.year), full.names = FALSE)
-huc.list <- huc.list[-c(1, length(huc.list))] # remove the folders that have no information
-huc.name <- huc.name[-c(1, length(huc.name))] # remove the folders that have no information
-names(huc.name) <- huc.list
-
-for(folder.id in huc.list) {
-        
-        temp.file.list <- list.files(folder.id, full.names = TRUE)
-        compiled.results <- NULL
-        
-        for( file.id in temp.file.list ) {
-                
-                temp.file <- read.csv(file.id)
-                
-                if(ncol(temp.file) == 6) {
-                        
-                        temp.file <- temp.file[, -6]
-                        
-                }
-                compiled.results <- rbind(compiled.results, temp.file)
-                rm(temp.file)
-                
-        }
-        
-        # If StreamConnect is na, fix to 1, if Numerator or Denominator is NA, fix to 0
-        
-        compiled.results$StreamConnect[is.na(compiled.results$StreamConnect)] <- 1
-        compiled.results$Numerator[is.na(compiled.results$Numerator)] <- 0
-        compiled.results$Denominator[is.na(compiled.results$Denominator)] <- 0
-        
-        # Save the results
-        write.csv(compiled.results, file = paste0("results/tables/probability/huc-", huc.unit, "/", analysis.year, "/compiled/", huc.name[folder.id], "-compiled_", Sys.Date(), ".csv"), row.names = FALSE)
-        print(huc.name[folder.id][[1]])
-        rm(compiled.results)
-        
-}
-
-# Now that the result files have been compiled, begin the merge with the original shapefiles for visualization
-
-# Define huc folder IDs
-watershed.ids <- read.dbf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.dbf")
-watershed.ids <- unique(as.character(watershed.ids$HUC_6))
-results.list <- list.files(paste0("results/tables/probability/huc-", huc.unit, "/", analysis.year, "/compiled"), full.names = TRUE)
-
-for (huc in watershed.ids) {
-        
-        # Load data
-        temp.shapefile <- readOGR(paste0("data/processed/huc-6/", analysis.year, "/gis/", huc, "/StreamSeg.shp"))
-        
-        # If there was a connectivity score calculated for a watershed (at least 1 culvert present)
-        # Proceed as normal, otherwise assume connectivity of 1
-        
-        if( length(paste0(results.list[grep(paste0(huc, "-"), results.list)])) == 0 ) {
-                
-                temp.shapefile@data["Numerator"] <- 0
-                temp.shapefile@data["Denominator"] <- 0
-                temp.shapefile@data["StreamConnect"] <- 1
-                
-        } else {
-          
-          # Load results
-          temp.compiled <- read.csv(paste0(results.list[grep(paste0(huc, "-"), results.list)]))
-          
-          # Merge files
-          temp.shapefile@data <- merge.data.frame(temp.shapefile@data, temp.compiled, by = "StreamID", all.x = TRUE)
-
-          rm(temp.compiled)
-          
-        }
-        
-        # Clean up shapefile data, rename columns (less than 7 characters)
-        temp.shapefile@data <- temp.shapefile@data[, c("StreamID", "StrmType", "LENGTH", "Strahler", "Numerator", "Denominator", "StreamConnect")]
-        colnames(temp.shapefile@data) <- c("StrmID", "Class", "Length", "Strhler", "Num", "Dem", "Connect")
-        
-        # There are instances where single streams were not given a score, update to a value of 1 for connectivity and 0 for num + dem
-        na.store <- temp.shapefile@data$Connect[is.na(temp.shapefile@data$Connect)]
-        
-        if (length(na.store) != 0) {
-                
-                temp.shapefile@data$Connect[is.na(temp.shapefile@data$Connect)] <- 1
-                temp.shapefile@data$Num[is.na(temp.shapefile@data$Num)] <- 0
-                temp.shapefile@data$Dem[is.na(temp.shapefile@data$Dem)] <- 0
-                
-        }
-
-        writeOGR(obj = temp.shapefile, 
-                 dsn = paste0("results/shapefiles/probabilities/huc-", huc.unit, "/", analysis.year, "/", huc, "-connectivity_", Sys.Date(), ".shp"),
-                 layer = huc,
-                 driver = "ESRI Shapefile")
-        
-        rm(temp.shapefile, na.store)
-        
-}
-
-###########################
-# Indicator Summarization #
-###########################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#####################
+# Indicator Summary #
+#####################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Clear memory
 rm(list=ls())
 gc()
 
 # Load libraries
+library(ggplot2)
+library(MetBrewer)
 library(sf)
 library(rgdal)
 
 # Definet the analysis year
-analysis.year <- 2018
-huc.unit <- 6
+hfi.year <- 2010
+huc.scale <- 6
 
-# Identify paths for each of the summarized shapefiles
-results.list <- list.files(paste0("results/shapefiles/probabilities/huc-", huc.unit, "/", analysis.year), full.names = TRUE)
-results.list <- results.list[grep(".shp", results.list)]
+# Identify the watershed list
+results.list <- list.files(paste0("data/processed/huc-", huc.scale, "/", 
+                           hfi.year, "/connectivity/"), full.names = TRUE)
 
-# Load the boundary layer for summarization
+# Load the watershed boundaries
 boundary.poly <- read_sf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.shp")
 watershed.ids <- unique(as.character(boundary.poly$HUC_6))
 
@@ -155,45 +49,144 @@ boundary.poly <- boundary.poly[, c("HUC_8", "HUC_6", "HUC_4", "HUC_2", "geometry
 # Create the blank data frame that will store the results
 boundary.poly$Connect <- NA
 
-for( huc in watershed.ids ) {
-  
-  # Load a stream layer
-  stream.layer <- read_sf(results.list[grep(paste0(huc, "-"), results.list)])
-  
-  # Calculate connectivity and merge with shapefile
-  boundary.poly$Connect[boundary.poly$HUC_6 == huc] <- sum(stream.layer$Connect * stream.layer$Length) / sum(stream.layer$Length)
-  
-  # Merge stream network
-  if (huc == "170502") {
-  
-    stream.network <- stream.layer
-    
-  } else {
-    
-    stream.network <- rbind(stream.layer, stream.network)
-    
-  }
-
-  
-  print(huc)
-  
+for(HUC in watershed.ids) {
+        
+        # Load a stream layer
+        load(results.list[grep(HUC, results.list)])
+        
+        # If no connectivity results, default to 100%
+        if(is.null(watershed.network[["Connectivity"]])) {
+                
+                boundary.poly$Connect[boundary.poly$HUC_6 == HUC] <- 100
+                
+        } else {
+                
+                # Subset connectivity results
+                connecitivty.results <- watershed.network[["Connectivity"]]
+                
+                # Calculate connectivity and merge with shapefile
+                boundary.poly$Connect[boundary.poly$HUC_6 == HUC] <- 100 * (sum(connecitivty.results$StreamConnect * 
+                                                                                 connecitivty.results$StreamLength) / sum(connecitivty.results$StreamLength))
+                rm(connecitivty.results)
+                
+        }
+        
+        print(HUC)
+        rm(watershed.network)
+ 
 }
 
-# Rename stream IDS
-stream.network$StrmID <- 1:nrow(stream.network)
-
 # Save watershed results
-write_sf(boundary.poly, dsn = paste0("results/shapefiles/probabilities/huc-6/summaries/watershed-status_", analysis.year, "_", Sys.Date(), ".shp"))
+write_sf(boundary.poly, dsn = paste0("results/shapefiles/summaries/favorability/watershed_status_", hfi.year, ".shp"))
 
-# Save watershed results
-write_sf(stream.network, dsn = paste0("results/shapefiles/probabilities/huc-6/summaries/stream-status_", analysis.year, "_", Sys.Date(), ".shp"))
+rm(list=ls())
+gc()
+
+##################################
+# Comparison to previous version #
+##################################
+
+new.results.2018 <- read_sf(paste0("results/shapefiles/summaries/favorability/watershed_status_2018.shp"))
+new.results.2010 <- read_sf(paste0("results/shapefiles/summaries/favorability/watershed_status_2010.shp"))
+old.results <- read_sf(paste0("results/shapefiles/old/provincial-watershed-connectivity_2021-07-14.shp"))
+old.results$Con2018 <- old.results$Con2018 * 100
+old.results$Con2010 <- old.results$Con2010 * 100
+colnames(new.results.2018)[c(1, 5)] <- c("HUC8", "Connect2018")
+colnames(new.results.2010)[c(1, 5)] <- c("HUC8", "Connect2010")
+
+combined <- merge.data.frame(new.results.2018, old.results, by = "HUC8")
+combined <- merge.data.frame(combined, new.results.2010, by = "HUC8")
+
+combined.plot <- ggplot(combined, aes(x = Con2018, y = Connect2018)) + 
+        geom_point() +
+        geom_abline(slope = 1) +
+        xlim(c(0,100)) +
+        ylim(c(0,100)) +
+        labs(x = "Connectivity (version 1)", y = "Connectivity (version 2)") +
+        ggtitle(paste0("Correlation = ", round(cor(combined$Connect2018, combined$Con2018), 2))) +
+        theme_light() +
+        theme(panel.grid.minor.y = element_blank(),
+              panel.grid.minor.x = element_blank(),
+              panel.grid.major.x = element_blank(), 
+              axis.text.x = element_text(size=18),
+              axis.text.y = element_text(size=18),
+              axis.title.x = element_text(size=18),
+              axis.title.y = element_text(size=18))
+
+ggsave(filename = "results/figures/version-comparison-2018HFI.jpeg",
+       plot = combined.plot,
+       height = 800,
+       width = 1200,
+       dpi = 72,
+       quality = 100,
+       units = "px")
+
+combined.plot <- ggplot(combined, aes(x = Con2010, y = Connect2010)) + 
+        geom_point() +
+        geom_abline(slope = 1) +
+        xlim(c(0,100)) +
+        ylim(c(0,100)) +
+        labs(x = "Connectivity (version 1)", y = "Connectivity (version 2)") +
+        ggtitle(paste0("Correlation = ", round(cor(combined$Connect2010, combined$Con2010), 2))) +
+        theme_light() +
+        theme(panel.grid.minor.y = element_blank(),
+              panel.grid.minor.x = element_blank(),
+              panel.grid.major.x = element_blank(), 
+              axis.text.x = element_text(size=18),
+              axis.text.y = element_text(size=18),
+              axis.title.x = element_text(size=18),
+              axis.title.y = element_text(size=18))
+
+ggsave(filename = "results/figures/version-comparison-2010HFI.jpeg",
+       plot = combined.plot,
+       height = 800,
+       width = 1200,
+       dpi = 72,
+       quality = 100,
+       units = "px")
+
+version.1.plot <- ggplot() + 
+        geom_sf(data = old.results, aes(color = Con2018, fill = Con2018), show.legend = TRUE) +
+        scale_fill_gradientn(name = paste0("Connectivity"), colors = (met.brewer(name = "Hiroshige", n = 100, type = "continuous")), limits = c(0,100), guide = "colourbar") +
+        scale_color_gradientn(colors = (met.brewer(name = "Hiroshige", n = 100, type = "continuous")), limits = c(0,100), guide = "none") +
+        ggtitle("Version 1") +
+        theme_light() +
+        theme(panel.grid.minor.y = element_blank(),
+              panel.grid.minor.x = element_blank(),
+              panel.grid.major.x = element_blank())
+
+ggsave(filename = "results/figures/version-1-2018HFI.jpeg",
+       plot = version.1.plot,
+       height = 1200,
+       width = 800,
+       dpi = 72,
+       quality = 100,
+       units = "px")
+
+version.2.plot <- ggplot() + 
+        geom_sf(data = new.results.2018, aes(color = Connect2018, fill = Connect2018), show.legend = TRUE) +
+        scale_fill_gradientn(name = paste0("Connectivity"), colors = (met.brewer(name = "Hiroshige", n = 100, type = "continuous")), limits = c(0,100), guide = "colourbar") +
+        scale_color_gradientn(colors = (met.brewer(name = "Hiroshige", n = 100, type = "continuous")), limits = c(0,100), guide = "none") +
+        ggtitle("Version 2") +
+        theme_light() +
+        theme(panel.grid.minor.y = element_blank(),
+              panel.grid.minor.x = element_blank(),
+              panel.grid.major.x = element_blank())
+
+ggsave(filename = "results/figures/version-2-2018HFI.jpeg",
+       plot = version.2.plot,
+       height = 1200,
+       width = 800,
+       dpi = 72,
+       quality = 100,
+       units = "px")
 
 rm(list=ls())
 gc()
 
 ####################
-# Final formatting #
-####################
+# Final formatting # OLD
+####################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Clear memory
 rm(list=ls())
