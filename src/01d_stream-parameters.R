@@ -37,7 +37,7 @@ for (hfi in hfi.year) {
         watershed.edge$PourElevation[is.na(watershed.edge$PourElevation)] <- watershed.edge$PourElevation[watershed.edge$Node == "5482-5482"]
         
         watershed.network$Edge <- watershed.edge
-        save(watershed.edge, file = paste0("data/processed/huc-6/", hfi, "/connectivity/network_080304.Rdata"))
+        save(watershed.network, file = paste0("data/processed/huc-6/", hfi, "/connectivity/network_080304.Rdata"))
         
 }
 
@@ -54,7 +54,7 @@ for (hfi in hfi.year) {
         watershed.edge$PourElevation[is.na(watershed.edge$PourElevation)] <- watershed.edge$PourElevation[watershed.edge$Node == "1-2"]
         
         watershed.network$Edge <- watershed.edge
-        save(watershed.edge, file = paste0("data/processed/huc-6/", hfi, "/connectivity/network_040306.Rdata"))
+        save(watershed.network, file = paste0("data/processed/huc-6/", hfi, "/connectivity/network_040306.Rdata"))
         
 }
 
@@ -71,7 +71,7 @@ for (hfi in hfi.year) {
         watershed.edge$PourElevation[is.na(watershed.edge$PourElevation)] <- watershed.edge$PourElevation[watershed.edge$Node == "40-40"]
         
         watershed.network$Edge <- watershed.edge
-        save(watershed.edge, file = paste0("data/processed/huc-6/", hfi, "/connectivity/network_110403.Rdata"))
+        save(watershed.network, file = paste0("data/processed/huc-6/", hfi, "/connectivity/network_110403.Rdata"))
         
 }
 
