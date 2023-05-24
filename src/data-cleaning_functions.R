@@ -1,7 +1,7 @@
 #
 # Title: Functions for cleaning the base GIS data
 # Created: September 1st, 2021
-# Last Updated: September 1st, 2021
+# Last Updated: May 18th, 2023
 # Author: Brandon Allen
 # Objectives: Functions required for extracting stream length, order, intersections (culverts) with the roads layer, and identification of intersections as bridges.
 # Keywords: Stream Standardization, Network extraction, Linear Feature subsetting, Stream Slope, Upstream Distance
@@ -986,6 +986,14 @@ upstream_distance <- function(edge.network, node.network, culvert.id) {
   # Create the stream network from the broken network
   broken.network <- network_visualization(edge.network = edge.network[edge.network$Node != culvert.id, "Node"], 
                                           conversion = TRUE) 
+  
+  # If the last stream segment has a culvert on it, the membership component will fail.
+  # Manually add that node to the graph
+  if(length(V(broken.network)) != nrow(node.network)) {
+          
+          broken.network <- add_vertices(broken.network, (nrow(node.network) - length(V(broken.network))))
+          
+  }
   
   # Identify focal segments
   upstream.segment <- strsplit(culvert.id, split = "-")[[1]][1]
