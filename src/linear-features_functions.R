@@ -1,5 +1,5 @@
 #
-# Title: Functions for cleaning the base GIS data
+# Title: Functions for prepping the linear features
 # Created: September 1st, 2021
 # Last Updated: June 27th, 2023
 # Author: Brandon Allen
