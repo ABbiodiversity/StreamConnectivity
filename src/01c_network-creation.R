@@ -84,7 +84,6 @@ clusterEvalQ(core.input, {
         
 })
 
-start.time <- Sys.time()
 # Loop through each available HFI inventory
 foreach(hfi = hfi.series) %dopar% 
         
@@ -108,9 +107,6 @@ foreach(hfi = hfi.series) %dopar%
         )
 
 stopCluster(core.input)
-
-end.time <- Sys.time()
-end.time - start.time
 
 # Clear memory
 rm(list=ls())
