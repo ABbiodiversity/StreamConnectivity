@@ -341,7 +341,6 @@ stream_distance <- function(watershed.path) {
                 watershed.network[["Edge_Cleaned"]] <- watershed.network$Edge_Cleaned
                 watershed.network[["Node_Cleaned"]] <- watershed.network$Node_Cleaned
                 save(watershed.network, file = watershed.path)
-                next()
                 
         }
         
