@@ -1,7 +1,7 @@
 #
 # Title: Functions for creating the stream network
 # Created: September 1st, 2021
-# Last Updated: June 27th, 2024
+# Last Updated: July 5th, 2024
 # Author: Brandon Allen
 # Objectives: Define functions required for ecreating the stream network
 # Keywords: Network extraction
@@ -483,6 +483,8 @@ def autoIncrement():
                         temp.df <- read_sf(dsn = watershed.geodatabase,
                                              layer = paste0("pour_point_id_temp_", basin.id))
                         
+                        temp.df <- as.data.frame(temp.df)
+                        
                         # Identify min elevation and max strahler (represents the lowest pour point)
                         temp.df <- temp.df[temp.df$RASTERVALU == min(temp.df$RASTERVALU),  ]
                         temp.df <- temp.df[temp.df$Strahler == max(temp.df$Strahler),  ]
@@ -528,7 +530,19 @@ def autoIncrement():
                 stream.edges$Node <- paste0(stream.edges$StreamID_1, "-", stream.edges$StreamID_2)
                 stream.edges$Up <- ifelse(stream.edges$Class == "Split", 1, NA)
                 stream.edges <- merge(stream.edges, culvert.df, by = "TARGET_FID", all = TRUE)
-    
+                
+                # Add the Road/Rail feature type
+                # Read in the table
+                feature.ty <- read_sf(dsn = watershed.geodatabase,
+                                      layer = "Culverts")
+                
+                feature.ty <- as.data.frame(feature.ty)
+                feature.ty <- feature.ty[, c("InterID", "FEATURE_TY_12")]
+                colnames(feature.ty) <- c("TARGET_FID", "FEATURE_TY")
+                
+                # Merge the basin info
+                stream.edges <- merge.data.frame(stream.edges, feature.ty, by = "TARGET_FID", all = TRUE)
+                
                 # Correct culverts that are actually bridges and add the date of construction/survey
                 
                 # Access Layer Road bridges
@@ -616,6 +630,7 @@ def autoIncrement():
                                         Up = rep(1, nrow(stream.edges)),
                                         Down = rep(1, nrow(stream.edges)),
                                         Class = stream.edges$Class,
+                                        FeatureType = stream.edges$FEATURE_TY,
                                         BridgeDate = stream.edges$BridgeDate,
                                         Dam = stream.edges$Dam,
                                         DamStatus = stream.edges$DamStatus,
