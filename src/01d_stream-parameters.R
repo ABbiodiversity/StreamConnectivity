@@ -85,7 +85,7 @@ library(parallel)
 source("src/stream-parameters_functions.R")
 
 # Create the appropriate linear feature subsets using the three HUC scales of interest
-hfi.series <- c(2010) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021)
 
 # It is more efficient to implement parallel processes
 # across watersheds than it is years (more watersheds than years)
@@ -137,9 +137,9 @@ foreach(hfi = hfi.series) %dopar%
 
 stopCluster(core.input)
 
-#
-# Upstream Distance Test
-#
+#####################
+# Upstream Distance #
+#####################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Clear memory
 rm(list=ls())
@@ -155,7 +155,7 @@ library(parallel)
 source("src/stream-parameters_functions.R")
 
 # Create the appropriate linear feature subsets using the three HUC scales of interest
-hfi.series <- c(2010) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021)
 
 # It is more efficient to implement parallel processes
 # across watersheds than it is years (more watersheds than years)
