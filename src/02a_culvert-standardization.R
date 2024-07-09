@@ -1,7 +1,7 @@
 #
 # Title: Standardizing the culvert data
 # Created: March 31st, 2023
-# Last Updated: May 18th, 2023
+# Last Updated: July 1st, 2024
 # Author: Brandon Allen
 # Objectives: Standardize the culvert data from various sources in preparation for modeling
 # Keywords: Notes, Standardization, Extraction from matching, Culvert Predictions
@@ -9,13 +9,13 @@
 
 #########
 # Notes #
-#########~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#########~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 # 1) All paths defined in this script are local
 #
 ###################
 # Standardization # Clean and stitch surveys together
-###################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+###################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Clear memory
 rm(list=ls())
@@ -112,12 +112,12 @@ library(sf)
 # Load the culvert data
 load("data/processed/culverts/culvert-surveys-cleaned.Rdata")
 
-# Initialize reticulate to communicate with ArcPro
-py_discover_config() # We need version 3.7
-py_config() # Double check it is version 3.7
+# Initialize arcpy
+py_discover_config() # We need version 3.9
+py_config() # Double check it is version 3.9
 
-# Set python version
-use_python(python = "C:/Users/ballen/miniconda3/envs/r-reticulate/python.exe")
+# Set python 
+use_python(python = "C:/Users/ballen/AppData/Local/r-miniconda/envs/r-reticulate/python.exe")
 
 # Load arcpy
 arcpy <- import('arcpy') 
@@ -162,11 +162,11 @@ culvert.spatial <- st_as_sf(x = culvert.data, coords = c("Longitude", "Latitude"
 culvert.spatial <- st_transform(culvert.spatial, crs = st_crs(3400))
 write_sf(culvert.spatial, dsn = "data/processed/culverts/culvert-surveys-cleaned.shp")
 
-# Loop through each watershed
+# Loop through each watershed using the most recent HFI inventory
 watershed.ids <- read.dbf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.dbf")
 watershed.ids <- unique(as.character(watershed.ids$HUC_6))
 huc.scale <- 6
-hfi.year <- 2018
+hfi.year <- 2021
 culvert.attributes <- NULL
 
 for(HUC in watershed.ids) {
@@ -270,5 +270,5 @@ for(HUC in watershed.ids) {
         
 }
 
-comment(culvert.attributes) <- "Culvert data was matched with GIS attributes on May 18th, 2023"
+comment(culvert.attributes) <- "Culvert data was matched with GIS attributes on July 9th, 2024"
 save(culvert.attributes, file = "data/processed/culverts/culvert-model-attributes.Rdata")
