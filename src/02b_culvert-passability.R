@@ -1,34 +1,33 @@
 #
 # Title: Modeling Culvert Passability
 # Created: September 1st, 2021
-# Last Updated: May 15th, 2023
+# Last Updated: July 15th, 2024
 # Author: Brandon Allen
 # Objectives: Using the available culvert data, construct a hanging passability model
-# Keywords: Notes, Culvert Model, Model Assessment, Culvert Predictions
+# Keywords: Notes, Standardization, Bootstrap, Model Assessment, Culvert Predictions
 #
 
 #########
 # Notes # 
-#########~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#########~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 # 1) All paths defined in this script are local
 #
-#################
-# Culvert Model # 
-#################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+###################
+# Standardization # 
+###################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Clear memory
 rm(list=ls())
 gc()
 
-# Load libraries and data
-library(dismo)
-library(caret)
-library(gbm)
-library(ggplot2)
-library(pROC)
-library(PresenceAbsence)
-library(reshape2)
+# Load libraries
+library(foreach)
+library(foreign)
+library(parallel)
+
+# Source functions
+source("src/culvert-passability_functions.R")
 
 # Load the culvert data
 load("data/processed/culverts/culvert-model-attributes.Rdata")
@@ -57,27 +56,57 @@ model.data$CMI <- model.data$MAP - model.data$Eref
 # Convert distance from m to km
 model.data$Distance <- model.data$Distance / 1000
 
+# Reclassify the road data (Gravel, unimproved, paved?)
+
+model.data$RoadClass <- "Paved"
+model.data$RoadClass[model.data$FeatureType %in% c("ROAD-GRAVEL-1L", "ROAD-GRAVEL-2L",
+                                                   "ROAD-UNPAVED-2L")] <- "Gravel"
+model.data$RoadClass[model.data$FeatureType %in% c("FORD-WINTER-XING", "ROAD-UNCLASSIFIED",
+                                                   "ROAD-UNIMPROVED", "ROAD-WINTER-ACCESS",
+                                                   "ROAD-WINTER-ROAD", "TRAIL-ATV",
+                                                   "TRUCK-TRAIL")] <- "Unimproved"
+model.data$RoadClass <- factor(model.data$RoadClass)
+
 # Filter the model data to include only surveys post 2018. This is done because the landscape we are using is 
 # based on the 2018 road network. Culverts older than that may have been fixed, while newer surveys may still 
 # represent that status of the watershed a few years ago seeing as we don't have many reclaimed culverts in the data.
 model.data <- model.data[model.data$SurveyDate > "2018-01-01", ]
 
-# Create boosted regression tree using the complete data set
-# Use the following covariates (Compactness, CMI, Confluence, Distance, and SlopePoint)
-brt.model <- gbm.step(data = model.data, gbm.x = c(13, 21, 27, 29, 36), 
-                      gbm.y = 33, family = "bernoulli", tree.complexity = 5,
-                      learning.rate = 0.001, bag.fraction = 0.5, n.folds = 10,
-                      prev.stratify = TRUE, max.trees = 20000)
+# Test the model using the full variable list, then use gbm.simplify to simplify the object. 
+# After testing is completed, use the single best model for the bootstrap iterations
 
-# Based on the model, calculate the threshold for classifying the predictions.
-# We need to do this as the probabilities from the glm are skewed due to the low prevalence of 
-# hanging culverts in the model data.
+#############
+# Bootstrap # 
+#############~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Define the cores and objects required for for parallel processing
+n.clusters <- 14
+core.input <- makeCluster(n.clusters)
+clusterExport(core.input, c("model.data", "brt_function"))
+clusterEvalQ(core.input, {
+        
+        # Load libraries
+        library(dismo)
+        library(gbm)
+
+        
+})
+
+# Loop through each available HFI inventory
+brt.models <- parLapply(core.input, 
+                        as.list(1:100),
+                        fun = function(boot) tryCatch(brt_function(data = model.data,
+                                                                   boot = boot), 
+                                                      error = function(e) e))
+        
+
+
+stopCluster(core.input)
+
+# Create the confusion matrix for the first model
+brt.model <- brt.models[[1]]
 model.data$Prediction <- predict.gbm(brt.model, model.data,
                                      n.trees = brt.model$gbm.call$best.trees, type="response")
-
-# One option to combat this is to convert the probabilties into a favorability index (favorable to poor culverts)
-pass.prevalence <- table(model.data$PassabilityConcern)[["No Concerns"]] / nrow(model.data)
-model.data$Favorability <- plogis(qlogis(model.data$Prediction) - qlogis(pass.prevalence))
 
 # We use the MaxSens+Spec threshold approach as it is a more conservative threshold compared to Kappa.
 # It incorrectly predicts more hanging culverts when not present, but has high accuracy is predicting known hanging culverts.
@@ -87,18 +116,15 @@ pass.threshold <- optimal.thresholds(model.data[, c("Node", "Passability", "Pred
 
 # Create the confusion matrix for reporting purposes
 confusion.matrix <- confusionMatrix(data = factor(ifelse(model.data$Prediction >= pass.threshold, 1, 0)), 
-                           reference = factor(model.data$Passability))
+                                    reference = factor(model.data$Passability))
 pROC::auc(model.data$Passability, model.data$Prediction)
 
-# Model AUC fit is identical, Kappa statistic is slightly reduce (still 0.42)
-confusion.matrix <- confusionMatrix(data = factor(ifelse(model.data$Favorability > 0.5, 1, 0)), 
-                                    reference = factor(model.data$Passability))
-pROC::auc(model.data$Passability, model.data$Favorability)
-
-
 # Save the model output with the commented fit statistics
-comment(brt.model) <- "Training data AUC score = 0.955; Cross-validation AUC score = 0.83; Created May 18, 2023"
-save(brt.model, pass.threshold, pass.prevalence, confusion.matrix, file = "results/hanging-culvert-model/version-2/hanging-culvert-model.Rdata")
+comment(brt.models) <- paste0("100 Bootstrap iterations. First bootstrap uses full dataset; ",
+                              "Accuracy = ", round(confusion.matrix$overall["Accuracy"], 3), "; ",
+                              "Kappa = ", round(confusion.matrix$overall["Kappa"], 3), 
+                              "; Created July 15, 2024")
+save(brt.models, pass.threshold, pass.prevalence, confusion.matrix, file = "results/hanging-culvert-model/version-4/hanging-culvert-model.Rdata")
 
 ####################
 # Model Assessment # 
@@ -115,7 +141,7 @@ library(ggplot2)
 library(sf)
 
 # Load hanging culvert model 
-load("results/hanging-culvert-model/version-2/hanging-culvert-model.Rdata")
+load("results/hanging-culvert-model/version-4/hanging-culvert-model.Rdata")
 
 # Define analysis year
 huc.scale <- 6
@@ -127,6 +153,7 @@ watershed.ids <- unique(as.character(watershed.ids$HUC_6))
 watershed.average <- data.frame(Watershed = watershed.ids,
                                 NCulverts = NA,
                                 MeanPass = NA,
+                                Favorability = NA,
                                 BinaryPass = NA)
 
 # Loop through each watershed to assess the distribution of hanging culverts throughout the province
@@ -152,20 +179,32 @@ for(HUC in watershed.ids) {
         # Convert distance from m to km
         temp.node$Distance <- temp.node$Distance / 1000
         
+        # Reclassify the road data (Gravel, unimproved, paved?)
+        temp.node$RoadClass <- "Paved"
+        temp.node$RoadClass[temp.node$FeatureType %in% c("ROAD-GRAVEL-1L", "ROAD-GRAVEL-2L",
+                                                           "ROAD-UNPAVED-2L")] <- "Gravel"
+        temp.node$RoadClass[temp.node$FeatureType %in% c("FORD-WINTER-XING", "ROAD-UNCLASSIFIED",
+                                                           "ROAD-UNIMPROVED", "ROAD-WINTER-ACCESS",
+                                                           "ROAD-WINTER-ROAD", "TRAIL-ATV",
+                                                           "TRUCK-TRAIL")] <- "Unimproved"
+        temp.node$RoadClass <- factor(temp.node$RoadClass)
+        
         # Make prediction
         temp.node$Up <- predict.gbm(brt.model, temp.node,
                                     n.trees = brt.model$gbm.call$best.trees, type="response")
         
         # Convert to favorability
-        temp.node$Up <- plogis(qlogis(temp.node$Up) - qlogis(pass.prevalence))
+        temp.node$Favorability <- plogis(qlogis(temp.node$Up) - qlogis(pass.prevalence))
         
         # Subset the network to include only Culverts
         temp.node <- temp.node[!(temp.node$Class %in% c("Split", "Bridge")), ]
         
         # Store the results
-        watershed.average[watershed.average$Watershed == HUC, c("NCulverts", "MeanPass", "BinaryPass")] <- c(nrow(temp.node), 
-                                                                                                             mean(temp.node$Up), 
-                                                                                                             mean(ifelse(temp.node$Up > 0.5, 1, 0)))
+        watershed.average[watershed.average$Watershed == HUC, c("NCulverts", "MeanPass", 
+                                                                "Favorability", "BinaryPass")] <- c(nrow(temp.node), 
+                                                                                                    mean(temp.node$Up),
+                                                                                                    mean(temp.node$Favorability),
+                                                                                                    mean(ifelse(temp.node$Up > 0.5, 1, 0)))
         rm(temp.node)
         
         print(HUC)
@@ -181,31 +220,34 @@ colnames(watershed.average)[1] <- "HUC_6"
 # Save the predictions
 culvert.gis <- read_sf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.shp")
 culvert.gis <- merge.data.frame(culvert.gis, watershed.average, by = "HUC_6")
-write_sf(culvert.gis, dsn = "results/hanging-culvert-model/version-2/provincial-hanging-culvert-model.shp")
+write_sf(culvert.gis, dsn = "results/hanging-culvert-model/version-4/provincial-hanging-culvert-model.shp")
 
 # Load the previous hanging culvert model and assess fit between the two versions
 old.model <- read_sf("results/hanging-culvert-model/version-1/provincial-culvert-model_2021-06-04.shp")
 
 # Align the two sets of data
 old.model <- as.data.frame(st_drop_geometry(old.model[, c("HUC_6", "NCulverts", "MeanPass", "BinaryPass")]))
+old.model <- old.model[!duplicated(old.model), ]
 new.model <- culvert.gis[, c("HUC_6", "NCulverts", "MeanPass", "BinaryPass")]
-colnames(new.model) <- c("HUC_6", "NCulvertsNew", "MeanPassNew", "BinaryPassNew")
+new.model <- new.model[!duplicated(new.model), ]
+colnames(new.model) <- c("HUC_6", "NCulvertsV3", "MeanPassV3", "BinaryPassV3")
 culvert.predictions <- merge.data.frame(old.model, new.model, by = "HUC_6")
+
 
 # Compare the two types of predictions (mean probability versus threshold probabilities)
 # Moderate correlations between the two models (0.817, 0.738).
 # New model suggests things aren't as bad as the previous version. With more surveys, we are finding fewer hanging culverts in proportion.
-ggplot(data= culvert.predictions, aes(y = MeanPassNew, x = MeanPass)) +
+ggplot(data= culvert.predictions, aes(y = MeanPassV3, x = MeanPass)) +
         geom_point() +
         xlim(c(0.5,1)) +
         ylim(c(0.5,1)) +
-        ggtitle(paste("Correlation =", round(cor(culvert.predictions$MeanPassNew, culvert.predictions$MeanPass), 3)))
+        ggtitle(paste("Correlation =", round(cor(culvert.predictions$MeanPassV3, culvert.predictions$MeanPass), 3)))
 
-ggplot(data= culvert.predictions, aes(y = BinaryPassNew, x = BinaryPass)) +
+ggplot(data= culvert.predictions, aes(y = BinaryPassV3, x = BinaryPass)) +
         geom_point()  +
         xlim(c(0,1)) +
         ylim(c(0,1)) +
-        ggtitle(paste("Correlation =", round(cor(culvert.predictions$BinaryPassNew, culvert.predictions$BinaryPass), 3)))
+        ggtitle(paste("Correlation =", round(cor(culvert.predictions$BinaryPassV3, culvert.predictions$BinaryPass), 3)))
 
 
 #######################
@@ -261,7 +303,7 @@ for (analysis.year in hfi.year) {
                                             n.trees = brt.model$gbm.call$best.trees, type="response")
                 
                 # Convert to favorability
-                temp.node$Up <- plogis(qlogis(temp.node$Up) - qlogis(pass.prevalence))
+                # temp.node$Up <- plogis(qlogis(temp.node$Up) - qlogis(pass.prevalence))
                 
                 # If it is a split or bridge, fix to 1
                 temp.node$Up[(temp.node$Class %in% c("Split", "Bridge"))] <- 1
