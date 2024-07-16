@@ -1,10 +1,10 @@
 #
 # Title: Modeling Culvert Passability
 # Created: September 1st, 2021
-# Last Updated: July 15th, 2024
+# Last Updated: July 16th, 2024
 # Author: Brandon Allen
 # Objectives: Using the available culvert data, construct a hanging passability model
-# Keywords: Notes, Standardization, Bootstrap, Model Assessment, Culvert Predictions
+# Keywords: Notes, Standardization, Bootstrap, Model Assessment, Culvert Surveys
 #
 
 #########
@@ -124,7 +124,7 @@ comment(brt.models) <- paste0("100 Bootstrap iterations. First bootstrap uses fu
                               "Accuracy = ", round(confusion.matrix$overall["Accuracy"], 3), "; ",
                               "Kappa = ", round(confusion.matrix$overall["Kappa"], 3), 
                               "; Created July 15, 2024")
-save(brt.models, pass.threshold, pass.prevalence, confusion.matrix, file = "results/hanging-culvert-model/version-4/hanging-culvert-model.Rdata")
+save(brt.models, pass.threshold, confusion.matrix, file = "results/hanging-culvert-model/version-4/hanging-culvert-model.Rdata")
 
 ####################
 # Model Assessment # 
@@ -153,8 +153,9 @@ watershed.ids <- unique(as.character(watershed.ids$HUC_6))
 watershed.average <- data.frame(Watershed = watershed.ids,
                                 NCulverts = NA,
                                 MeanPass = NA,
-                                Favorability = NA,
                                 BinaryPass = NA)
+
+brt.model <- brt.models[[1]]
 
 # Loop through each watershed to assess the distribution of hanging culverts throughout the province
 for(HUC in watershed.ids) {
@@ -179,7 +180,7 @@ for(HUC in watershed.ids) {
         # Convert distance from m to km
         temp.node$Distance <- temp.node$Distance / 1000
         
-        # Reclassify the road data (Gravel, unimproved, paved?)
+        # Reclassify the road data (Gravel, Unimproved, Paved)
         temp.node$RoadClass <- "Paved"
         temp.node$RoadClass[temp.node$FeatureType %in% c("ROAD-GRAVEL-1L", "ROAD-GRAVEL-2L",
                                                            "ROAD-UNPAVED-2L")] <- "Gravel"
@@ -193,18 +194,14 @@ for(HUC in watershed.ids) {
         temp.node$Up <- predict.gbm(brt.model, temp.node,
                                     n.trees = brt.model$gbm.call$best.trees, type="response")
         
-        # Convert to favorability
-        temp.node$Favorability <- plogis(qlogis(temp.node$Up) - qlogis(pass.prevalence))
-        
         # Subset the network to include only Culverts
         temp.node <- temp.node[!(temp.node$Class %in% c("Split", "Bridge")), ]
         
         # Store the results
-        watershed.average[watershed.average$Watershed == HUC, c("NCulverts", "MeanPass", 
-                                                                "Favorability", "BinaryPass")] <- c(nrow(temp.node), 
+        watershed.average[watershed.average$Watershed == HUC, c("NCulverts", "MeanPass", "BinaryPass")] <- c(nrow(temp.node), 
                                                                                                     mean(temp.node$Up),
-                                                                                                    mean(temp.node$Favorability),
-                                                                                                    mean(ifelse(temp.node$Up > 0.5, 1, 0)))
+                                                                                                    mean(ifelse(temp.node$Up > pass.threshold, 
+                                                                                                                1, 0)))
         rm(temp.node)
         
         print(HUC)
@@ -250,100 +247,50 @@ ggplot(data= culvert.predictions, aes(y = BinaryPassV3, x = BinaryPass)) +
         ggtitle(paste("Correlation =", round(cor(culvert.predictions$BinaryPassV3, culvert.predictions$BinaryPass), 3)))
 
 
-#######################
-# Culvert Predictions # 
-#######################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+################### NOTES STORE THE BOOTSTRAP PREDICTION (UP_1, UP_2, etc). NEED TO DECIDE ON WINDOW FOR 
+# Culvert Surveys # USING SURVEYS. IF PASSABLE, SURVEY WINDOW DEGRADES TO PREDICTION. IF IMPASSABLE, STAYS BROKEN. 
+###################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Clear memory
 rm(list=ls())
 gc()
 
 # Load libraries
+library(foreach)
 library(foreign)
-library(gbm)
+library(parallel)
 
-# Load hanging culvert model and matched data
-load("results/hanging-culvert-model/version-2/hanging-culvert-model.Rdata")
-load("data/processed/culverts/culvert-model-attributes.Rdata")
+# Source functions
+source("src/culvert-passability_functions.R")
 
 # Define analysis year
 huc.scale <- 6
-hfi.year <- c(2010, 2018)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021)
 
 # Define list watersheds to make predictions for
 watershed.ids <- read.dbf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.dbf")
 watershed.ids <- unique(as.character(watershed.ids$HUC_6))
 
-for (analysis.year in hfi.year) {
+# Define the cores and objects required for for parallel processing
+n.clusters <- 14
+core.input <- makeCluster(n.clusters)
+clusterExport(core.input, c("huc.scale", "watershed.ids", "hfi.series",
+                            "culvert_survey"))
+clusterEvalQ(core.input, {
         
-        for(HUC in watershed.ids) {
-                
-                # Load the appropriate Rdata with the culvert information
-                load(paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                            analysis.year, "/connectivity/network_", HUC, ".Rdata"))
-                
-                # If there are culverts in the watershed, proceed with the match
-                if(is.null(watershed.network[["Edge_Cleaned"]])) {
-                        
-                        next()
-                        
-                }
-                
-                # Pull out culvert data
-                temp.node <- watershed.network[["Edge_Cleaned"]]
-                
-                # Add CMI
-                temp.node$CMI <- temp.node$MAP - temp.node$Eref
-                
-                # Convert distance from m to km
-                temp.node$Distance <- temp.node$Distance / 1000
-                
-                # Make prediction
-                temp.node$Up <- predict.gbm(brt.model, temp.node,
-                                            n.trees = brt.model$gbm.call$best.trees, type="response")
-                
-                # Convert to favorability
-                # temp.node$Up <- plogis(qlogis(temp.node$Up) - qlogis(pass.prevalence))
-                
-                # If it is a split or bridge, fix to 1
-                temp.node$Up[(temp.node$Class %in% c("Split", "Bridge"))] <- 1
-                
-                # Threshold the remaining predictions (No need to threshold now)
-                # temp.node$Up <- ifelse(temp.node$Up >= pass.threshold, 1, 0)
-                
-                # If there are surveys completed in the region within a match them (2 year window)
-                min.logical <- temp.node$SurveyDate > as.Date(paste0(analysis.year - 2, "-01-01"))
-                min.logical[is.na(min.logical)] <- FALSE
-                max.logical <- temp.node$SurveyDate < as.Date(paste0(analysis.year + 2, "-01-01"))
-                max.logical[is.na(max.logical)] <- FALSE
-                concerns.logical <- temp.node$Passability %in% c("Serious Concerns", "Concerns", "Some Concerns")
-                no.concerns.logical <- temp.node$Passability %in% c("No Concerns")
-                
-                # Change passability value for blocked culverts
-                temp.node$Up[min.logical & max.logical & concerns.logical] <- 0
-                
-                # Change passability value for functional culverts
-                temp.node$Up[min.logical & max.logical & no.concerns.logical] <- 1
-                
-                # If a dam is present, define as 0
-                temp.node$Up[!is.na(temp.node$Dam)] <- 0
-                temp.node$Class[!is.na(temp.node$Dam)] <- "Dam"
-                
-                # If crossing or stream intersection occurs in the minable region, fix to 0
-                temp.node$Up[temp.node$Mineable == "Inside"] <- 0
-                
-                # Replace the with file with the predicted version then save
-                watershed.network[["Edge_Cleaned"]] <- temp.node
-                save(watershed.network, file = paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                                               analysis.year, "/connectivity/network_", HUC, ".Rdata"))
+})
 
-                print(HUC)
-                
-        }
+# Loop through each available HFI inventory
+foreach(hfi = hfi.series) %dopar% 
         
-        print(analysis.year)
-        
-}
+        parLapply(core.input, 
+                  watershed.ids, 
+                  fun = function(huc) tryCatch(culvert_survey(path = paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
+                                                                            hfi, "/connectivity/network_", huc, ".Rdata"),
+                                                              hfi = hfi), error = function(e) e)
+        )
+
+stopCluster(core.input)
 
 # Clear memory
 rm(list=ls())
