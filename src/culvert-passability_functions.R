@@ -48,7 +48,8 @@ brt_function <- function(data = model.data,
 ##################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 culvert_survey <- function(path = NA,
-                           hfi = NA) {
+                           hfi = NA,
+                           boot.path = NA) {
         
         # If path is NA, throw warning
         if(is.na(path)) {
@@ -121,6 +122,33 @@ culvert_survey <- function(path = NA,
                 temp.node$ModelPassability[temp.node$Class == "Culvert" &
                                                    !survey.logical & 
                                                    !(mineable.logical)] <- TRUE
+                
+                # For each of the bootstrap iterations, create the 90% confidence interval
+                prediction.matrix <- matrix(data = NA, ncol = 100, nrow = nrow(temp.node))
+                for(boot in 1:length(boot.path)) {
+                        
+                        # Load the boosted regression tree
+                        load(boot.path[boot])
+                        
+                        prediction.matrix[, boot] <- predict.gbm(brt.model, 
+                                                                 temp.node,
+                                                                 n.trees = brt.model$gbm.call$best.trees, 
+                                                                 type="response")
+                        
+                }
+                
+                prediction.boot <- data.frame(Mean = apply(prediction.matrix, MARGIN = 1, FUN = mean),
+                                              Lower = apply(prediction.matrix, MARGIN = 1, FUN = function(x) quantile(x, 0.1)),
+                                              Upper = apply(prediction.matrix, MARGIN = 1, FUN = function(x) quantile(x, 0.9)))
+                
+                # Add the Mean, Upper, and Lower predictions for the relevant culverts
+                temp.node$ModelMean <- NA
+                temp.node$ModelLower <- NA
+                temp.node$ModelUpper <- NA
+                
+                temp.node$ModelMean[temp.node$ModelPassability] <- prediction.boot$Mean[temp.node$ModelPassability]
+                temp.node$ModelLower[temp.node$ModelPassability] <- prediction.boot$Lower[temp.node$ModelPassability]
+                temp.node$ModelUpper[temp.node$ModelPassability] <- prediction.boot$Upper[temp.node$ModelPassability]
                 
                 # Replace the with file with the predicted version then save
                 watershed.network[["Edge_Cleaned"]] <- temp.node

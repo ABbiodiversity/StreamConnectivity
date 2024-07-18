@@ -96,7 +96,8 @@ clusterEvalQ(core.input, {
 brt.models <- parLapply(core.input, 
                         as.list(1:100),
                         fun = function(boot) tryCatch(brt_function(data = model.data,
-                                                                   boot = boot), 
+                                                                   boot = boot,
+                                                                   path = "results/hanging-culvert-model/version-4/bootstrap/"), 
                                                       error = function(e) e))
         
 
@@ -104,7 +105,7 @@ brt.models <- parLapply(core.input,
 stopCluster(core.input)
 
 # Create the confusion matrix for the first model
-brt.model <- brt.models[[1]]
+load("results/hanging-culvert-model/version-4/bootstrap/hanging-culvert-model_1.Rdata")
 model.data$Prediction <- predict.gbm(brt.model, model.data,
                                      n.trees = brt.model$gbm.call$best.trees, type="response")
 
@@ -124,7 +125,7 @@ comment(brt.models) <- paste0("100 Bootstrap iterations. First bootstrap uses fu
                               "Accuracy = ", round(confusion.matrix$overall["Accuracy"], 3), "; ",
                               "Kappa = ", round(confusion.matrix$overall["Kappa"], 3), 
                               "; Created July 15, 2024")
-save(brt.models, pass.threshold, confusion.matrix, file = "results/hanging-culvert-model/version-4/hanging-culvert-model.Rdata")
+save(brt.models, pass.threshold, confusion.matrix, file = "results/hanging-culvert-model/version-4/hanging-culvert-model-stats.Rdata")
 
 ####################
 # Model Assessment # 
@@ -271,12 +272,19 @@ hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021) # Define HFI years (20
 watershed.ids <- read.dbf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.dbf")
 watershed.ids <- unique(as.character(watershed.ids$HUC_6))
 
+# Define path for the bootstrap models
+boot.path <- list.files("results/hanging-culvert-model/version-4/bootstrap/", full.names = TRUE)
+
 # Define the cores and objects required for for parallel processing
 n.clusters <- 14
 core.input <- makeCluster(n.clusters)
 clusterExport(core.input, c("huc.scale", "watershed.ids", "hfi.series",
-                            "culvert_survey"))
+                            "culvert_survey", "boot.path"))
 clusterEvalQ(core.input, {
+        
+        # Load libraries
+        library(dismo)
+        library(gbm)
         
 })
 
@@ -287,7 +295,8 @@ foreach(hfi = hfi.series) %dopar%
                   watershed.ids, 
                   fun = function(huc) tryCatch(culvert_survey(path = paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
                                                                             hfi, "/connectivity/network_", huc, ".Rdata"),
-                                                              hfi = hfi), error = function(e) e)
+                                                              hfi = hfi,
+                                                              boot.list = boot.path), error = function(e) e)
         )
 
 stopCluster(core.input)
