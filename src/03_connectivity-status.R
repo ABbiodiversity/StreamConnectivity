@@ -34,14 +34,47 @@ watershed.ids <- read.dbf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.dbf"
 watershed.ids <- as.character(unique(watershed.ids$HUC_6)) # Includes all HUC-6 watersheds now
 
 # Define analysis years and watershed scale
-hfi <- c(2010, 2018)
+hfi.series <- c(2021)
 huc.scale <- 6
-n.clusters <- 8 # Adjust the number of cores
+n.clusters <- 14 # Adjust the number of cores
 
 # Define spatial autocorrelation variable
 # Mean distance of first order streams to highest order stream segment
 # HUC 6 - 71000, based on results from 02c_autocorrelation-distance.R
 Autocorrelation.d0 <- 71000 
+
+# Define the cores and objects required for for parallel processing
+core.input <- makeCluster(n.clusters)
+clusterExport(core.input, c("huc.scale", "watershed.ids", "hfi.series", "Autocorrelation.d0",
+                            "network_visualization", "connectivity_wrapper", "watershed_status",
+                            "stream_connectivity_matrix"))
+clusterEvalQ(core.input, {
+        
+        # Load libraries
+        library(igraph)
+        
+})
+
+start.time <- Sys.time()
+# Loop through each available HFI inventory
+foreach(hfi = hfi.series) %dopar% 
+        
+        parLapply(core.input, 
+                  as.list(watershed.ids), 
+                  fun = function(huc) tryCatch(connectivity_wrapper(huc.scale = huc.scale,
+                                                                    huc = huc,
+                                                                    hfi = hfi,
+                                                                    Autocorrelation.d0 = Autocorrelation.d0), 
+                                               error = function(e) e)
+        )
+
+stopCluster(core.input)
+end.time <- Sys.time()
+end.time - start.time
+
+# Clear memory
+rm(list=ls())
+gc()
 
 for (hfi.year in hfi) {
         
@@ -111,68 +144,29 @@ for (hfi.year in hfi) {
                 
                 # Create a blank object for storing the results across sub networks
                 connectivity <- NULL
-                
+                start.time <- Sys.time()
                 for (ID in largest.network) { 
                         
                         # Subset the stream segments and filter the number of available streams
                         node.data.subset <- node.data[grep(paste("^", ID, "$", sep = ""), node.data$Membership), ]
                         stream.habitat <- as.numeric(names(table(node.data.subset$HabitatType))) # Identify the stream habitat types within the network
                         
-                        # Define inputs required for parallel processing.
-                        core.input <- makeCluster(n.clusters)
-                        clusterExport(core.input, c("stream.network", "node.data", "edge.data", "edge.data.ref", 
-                                                    "stream.habitat", "Autocorrelation.d0",
-                                                    "stream.weight", "passability.weight", "stream_connectivity"))
-                        clusterEvalQ(core.input, {
-                                library(igraph)
-                        })
-                        
-                        # Calculate connectivity for each stream in the network
-                        Cj <- parSapply(core.input, node.data.subset$Stream, function(stream.id) stream_connectivity(focus.stream = stream.id, 
-                                                                                                                     base.network = stream.network, 
-                                                                                                                     base.node = node.data, 
-                                                                                                                     ref.edge = edge.data.ref, 
-                                                                                                                     cur.edge = edge.data, 
-                                                                                                                     habitat.type = stream.habitat,
-                                                                                                                     distance.weight = stream.weight,
-                                                                                                                     probability.weight = passability.weight,
-                                                                                                                     d0 = Autocorrelation.d0))
-                        
-                        
-                        stopCluster(core.input)
-                        
-                        ##################
-                        # Data formating #
-                        ##################
-                        
-                        Cj <- data.frame(t(Cj)) # Transpose
-                        
-                        for (col.id in 0:(ncol(Cj) / 4 - 1)) {
-                                
-                                if(col.id == 0) {
-                                        
-                                        Cj.formated <- Cj[, 1:4]
-                                        colnames(Cj.formated) <- c("StreamID", "HabitatType", "RefConnect", "CurConnect")
-                                        
-                                } else {
-                                        
-                                        Cj.temp <- Cj[, seq(col.id * 4 + 1, (col.id + 1) * 4, 1)]
-                                        colnames(Cj.temp) <- c("StreamID", "HabitatType", "RefConnect", "CurConnect")
-                                        
-                                        Cj.formated <- rbind.data.frame(Cj.formated, Cj.temp)
-                                        
-                                }
-                                
-                        }
-                        
-                        rm(Cj)
-                        
+                        Cj <- stream_connectivity_matrix(focal.streams = node.data.subset$Stream, 
+                                                     base.network = stream.network, 
+                                                     base.node = node.data, 
+                                                     ref.edge = edge.data.ref, 
+                                                     cur.edge = edge.data, 
+                                                     habitat.type = stream.habitat,
+                                                     distance.weight = stream.weight,
+                                                     probability.weight = passability.weight,
+                                                     d0 = Autocorrelation.d0)
+
                         ##########################
                         # Watershed Connectivity #
                         ##########################
                         
                         # Calculate watershed connectivity for each stream segment within the network
-                        c.watershed <- watershed_status(filter.node = node.data.subset, connect.status = Cj.formated)
+                        c.watershed <- watershed_status(filter.node = node.data.subset, connect.status = Cj)
                         
                         # If single segments (NA numerator) are lakes, fix numerator and denominator to 0 with StreamConnect == 1
                         # If single segments (NA numerator) are streams, fix numerator to denominator and StreamConnect == 1
@@ -198,8 +192,11 @@ for (hfi.year in hfi) {
                         # Store the results from each sub network in a list
                         connectivity <- rbind(c.watershed, connectivity)
                         
+                        print(ID)
+                        
                 }
-                
+                end.time <- Sys.time()
+                end.time - start.time
                 # Store the results as part of the original R object
                 watershed.network[["Connectivity"]] <- connectivity
                 
