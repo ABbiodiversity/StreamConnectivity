@@ -1,7 +1,7 @@
 #
 # Title: Calculating stream connectivity status
 # Created: September 1st, 2021
-# Last Updated: May 11th, 2023
+# Last Updated: July 19th, 2024
 # Author: Brandon Allen
 # Objectives: Calculating lotic connectivity for individual streams and watersheds
 # Keywords: Notes, Environment initialization, Stream connectivity, Watershed connectivity
@@ -14,7 +14,7 @@
 # 1) All paths defined in this script are local
 #
 ##############################
-# Environment initialization #
+# Environment initialization # Last piece is to add the bootstrap predictions (mean plus 90% predictions)
 ##############################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Clear memory
@@ -57,6 +57,7 @@ clusterEvalQ(core.input, {
 
 start.time <- Sys.time()
 # Loop through each available HFI inventory
+# Model mean
 foreach(hfi = hfi.series) %dopar% 
         
         parLapply(core.input, 
@@ -64,7 +65,36 @@ foreach(hfi = hfi.series) %dopar%
                   fun = function(huc) tryCatch(connectivity_wrapper(huc.scale = huc.scale,
                                                                     huc = huc,
                                                                     hfi = hfi,
-                                                                    Autocorrelation.d0 = Autocorrelation.d0), 
+                                                                    Autocorrelation.d0 = Autocorrelation.d0,
+                                                                    culvert.model = "ModelMean"), 
+                                               error = function(e) e)
+        )
+
+# Loop through each available HFI inventory
+# Model Upper
+foreach(hfi = hfi.series) %dopar% 
+        
+        parLapply(core.input, 
+                  as.list(watershed.ids), 
+                  fun = function(huc) tryCatch(connectivity_wrapper(huc.scale = huc.scale,
+                                                                    huc = huc,
+                                                                    hfi = hfi,
+                                                                    Autocorrelation.d0 = Autocorrelation.d0,
+                                                                    culvert.model = "ModelUpper"), 
+                                               error = function(e) e)
+        )
+
+# Loop through each available HFI inventory
+# Model Lower
+foreach(hfi = hfi.series) %dopar% 
+        
+        parLapply(core.input, 
+                  as.list(watershed.ids), 
+                  fun = function(huc) tryCatch(connectivity_wrapper(huc.scale = huc.scale,
+                                                                    huc = huc,
+                                                                    hfi = hfi,
+                                                                    Autocorrelation.d0 = Autocorrelation.d0,
+                                                                    culvert.model = "ModelLower"), 
                                                error = function(e) e)
         )
 
@@ -75,136 +105,3 @@ end.time - start.time
 # Clear memory
 rm(list=ls())
 gc()
-
-for (hfi.year in hfi) {
-        
-        for (HUC in watershed.ids) { 
-                
-                ##################
-                # Create Network #
-                ##################
-                
-                # Load the appropriate Rdata with the culvert information
-                load(paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                            hfi.year, "/connectivity/network_", HUC, ".Rdata"))
-                
-                # If there are no culverts in the watershed, skip the summary. 
-                # This is because we are skipping watersheds where we can assuming connectivity is 100% due to no road/rail infrastructure
-                if(is.null(watershed.network[["Edge_Cleaned"]])) {
-                        
-                        next()
-                        
-                }
-                
-                node.data <- watershed.network[["Node_Cleaned"]]
-                edge.data <- watershed.network[["Edge_Cleaned"]]
-                
-                # If there is an NA value edge, remove it
-                edge.data <- edge.data[!is.na(edge.data$UpstreamSeg), ]
-                
-                # Create the reference condition where passability is 1
-                edge.data.ref <- edge.data
-                edge.data.ref$Up <- 1
-                
-                # Identify base network structure
-                stream.network <- network_visualization(edge.network = edge.data$Node, 
-                                                        conversion = TRUE) 
-                
-                #######################
-                # Stream Connectivity #
-                #######################
-                
-                # In some instances, when the last stream segments are not connected to other segments,
-                # they are removed from the created stream network. If this occurs, remove the extra stream segments and store them.
-                membership.check <- components(stream.network)$membership
-                
-                if(nrow(node.data) == length(membership.check)) {
-                        
-                        node.data["Membership"] <- membership.check
-                        
-                } else{
-                        
-                        stream.extra <- node.data[-(1:length(membership.check)), ]
-                        node.data <- node.data[1:length(membership.check), ]
-                        node.data["Membership"] <- membership.check
-                        
-                }
-                
-                #########################################
-                # Parallel Processing of Stream Network # 
-                #########################################
-                
-                # For each network, calculate connectivity
-                row.names(node.data) <- node.data$Stream
-                stream.weight <- (node.data[edge.data$UpstreamSeg, "SectionLength"] / 2) + (node.data[edge.data$DownstreamSeg, "SectionLength"] / 2)
-                passability.weight <- log(edge.data$Up) * -1
-                
-                # For each network, calculate connectivity
-                largest.network <- as.numeric(names(sort(table(node.data$Membership), decreasing = FALSE))) # Smallest to largest network ID
-                
-                # Create a blank object for storing the results across sub networks
-                connectivity <- NULL
-                start.time <- Sys.time()
-                for (ID in largest.network) { 
-                        
-                        # Subset the stream segments and filter the number of available streams
-                        node.data.subset <- node.data[grep(paste("^", ID, "$", sep = ""), node.data$Membership), ]
-                        stream.habitat <- as.numeric(names(table(node.data.subset$HabitatType))) # Identify the stream habitat types within the network
-                        
-                        Cj <- stream_connectivity_matrix(focal.streams = node.data.subset$Stream, 
-                                                     base.network = stream.network, 
-                                                     base.node = node.data, 
-                                                     ref.edge = edge.data.ref, 
-                                                     cur.edge = edge.data, 
-                                                     habitat.type = stream.habitat,
-                                                     distance.weight = stream.weight,
-                                                     probability.weight = passability.weight,
-                                                     d0 = Autocorrelation.d0)
-
-                        ##########################
-                        # Watershed Connectivity #
-                        ##########################
-                        
-                        # Calculate watershed connectivity for each stream segment within the network
-                        c.watershed <- watershed_status(filter.node = node.data.subset, connect.status = Cj)
-                        
-                        # If single segments (NA numerator) are lakes, fix numerator and denominator to 0 with StreamConnect == 1
-                        # If single segments (NA numerator) are streams, fix numerator to denominator and StreamConnect == 1
-                        
-                        # If that single segment is a lake, it does not count for regional connectivity, but the polyline is still StreamConnect = 1. 
-                        # Otherwise, it does count.
-                        
-                        # If there is only one segment, fix the connectivity to 100%
-                        if(nrow(c.watershed) == 1) {
-                                
-                                if (node.data[node.data$Stream == c.watershed$StreamID, "HabitatType"] == -1) {
-                                        
-                                        c.watershed[1, c("StreamConnect", "Numerator", "Denominator")] <- c(1, NaN, NaN)
-                                        
-                                } else {
-                                        
-                                        c.watershed[1, c("StreamConnect", "Numerator")] <- c(1, c.watershed[1, c("Denominator")])
-                                        
-                                }
-                                
-                        }
-                        
-                        # Store the results from each sub network in a list
-                        connectivity <- rbind(c.watershed, connectivity)
-                        
-                        print(ID)
-                        
-                }
-                end.time <- Sys.time()
-                end.time - start.time
-                # Store the results as part of the original R object
-                watershed.network[["Connectivity"]] <- connectivity
-                
-                save(watershed.network, file = paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                                                      hfi.year, "/connectivity/network_", HUC, ".Rdata"))
-                
-                print(HUC)
-                
-        }
-        
-}
