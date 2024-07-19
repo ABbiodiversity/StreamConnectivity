@@ -110,7 +110,7 @@ stream_connectivity <- function(focus.stream, base.network, base.node, ref.edge,
 # Connectivity Wrapper # Wrapper function for parallel and matrix processing framework
 ########################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-connectivity_wrapper <- function(huc.scale, huc, hfi, Autocorrelation.d0) {
+connectivity_wrapper <- function(huc.scale, huc, hfi, Autocorrelation.d0, culvert.model = "ModelMean") {
         
         #################
         # Create Network #
@@ -137,6 +137,14 @@ connectivity_wrapper <- function(huc.scale, huc, hfi, Autocorrelation.d0) {
         # Create the reference condition where passability is 1
         edge.data.ref <- edge.data
         edge.data.ref$Up <- 1
+        
+        # Apply the appropriate culvert predictions
+        if(!(culvert.model %in% c("ModelMean", "ModelLower", "ModelUpper"))) {
+                
+                return("Culvert model not defined. ModelMean, ModelLower, ModelUpper, are acceptible values.")
+                
+        }
+        edge.data$Up[edge.data$ModelPassability] <- edge.data[, culvert.model][edge.data$ModelPassability]
         
         # Identify base network structure
         stream.network <- network_visualization(edge.network = edge.data$Node, 
@@ -226,7 +234,7 @@ connectivity_wrapper <- function(huc.scale, huc, hfi, Autocorrelation.d0) {
         }
 
         # Store the results as part of the original R object
-        watershed.network[["Connectivity"]] <- connectivity
+        watershed.network[[culvert.model]] <- connectivity
         
         save(watershed.network, file = paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
                                               hfi, "/test/network_", huc, ".Rdata"))
