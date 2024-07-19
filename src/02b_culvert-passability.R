@@ -273,13 +273,13 @@ watershed.ids <- read.dbf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.dbf"
 watershed.ids <- unique(as.character(watershed.ids$HUC_6))
 
 # Define path for the bootstrap models
-boot.path <- list.files("results/hanging-culvert-model/version-4/bootstrap/", full.names = TRUE)
+boot.list <- list.files("results/hanging-culvert-model/version-4/bootstrap/", full.names = TRUE)
 
 # Define the cores and objects required for for parallel processing
 n.clusters <- 14
 core.input <- makeCluster(n.clusters)
 clusterExport(core.input, c("huc.scale", "watershed.ids", "hfi.series",
-                            "culvert_survey", "boot.path"))
+                            "culvert_survey", "boot.list"))
 clusterEvalQ(core.input, {
         
         # Load libraries
@@ -296,7 +296,7 @@ foreach(hfi = hfi.series) %dopar%
                   fun = function(huc) tryCatch(culvert_survey(path = paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
                                                                             hfi, "/connectivity/network_", huc, ".Rdata"),
                                                               hfi = hfi,
-                                                              boot.list = boot.path), error = function(e) e)
+                                                              boot.path = boot.list), error = function(e) e)
         )
 
 stopCluster(core.input)
