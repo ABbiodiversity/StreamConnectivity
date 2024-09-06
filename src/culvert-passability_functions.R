@@ -1,7 +1,7 @@
 #
 # Title: Culvert Passability Functions
 # Created: July 15th, 2024
-# Last Updated: July 16th, 2024
+# Last Updated: September 6th, 2024
 # Author: Brandon Allen
 # Objectives: Bootstrapping wrapper for the culvert passability model
 # Keywords: BRT Bootstrap, Culvert Survey
@@ -33,8 +33,12 @@ brt_function <- function(data = model.data,
         }
         
         # Calculate the brt model
-        brt.model <- gbm.step(data = model.data, gbm.x = c(14,22,28,30,37,38), 
-                              gbm.y = 34, family = "bernoulli", tree.complexity = 5,
+        response.variable <- (1:ncol(model.data))[colnames(model.data) %in% c("Passability")]
+        model.coef <- (1:ncol(model.data))[colnames(model.data) %in% c("SlopePoint", "Confluence",
+                                                                     "Compactness", "Distance",
+                                                                     "CMI", "RoadClass")]
+        brt.model <- gbm.step(data = model.data, gbm.x = model.coef, gbm.y = response.variable, 
+                              family = "bernoulli", tree.complexity = 5,
                               learning.rate = 0.001, bag.fraction = 0.5, n.folds = 10,
                               prev.stratify = TRUE, max.trees = 20000)
         
@@ -89,8 +93,11 @@ culvert_survey <- function(path = NA,
                 temp.node$Up[bridge.split.logical] <- 1
                 
                 # Use all surveys prior to the focal year
-                survey.logical <- temp.node$SurveyDate < as.Date(paste0(hfi, "-01-01"))
-                survey.logical[is.na(survey.logical)] <- FALSE
+                # As we have already removed duplicate surveys, this is simple a doublecheck 
+                # there aren't stray culverts.
+                survey.logical <- !is.na(temp.node$SurveyDate)
+                
+                # Identify culverts of concern
                 concerns.logical <- temp.node$Passability %in% c("Serious Concerns", "Concerns", "Some Concerns")
                 no.concerns.logical <- temp.node$Passability %in% c("No Concerns")
                 
@@ -130,10 +137,12 @@ culvert_survey <- function(path = NA,
                         # Load the boosted regression tree
                         load(boot.path[boot])
                         
-                        prediction.matrix[, boot] <- predict.gbm(brt.model, 
-                                                                 temp.node,
-                                                                 n.trees = brt.model$gbm.call$best.trees, 
-                                                                 type="response")
+                        pass.prob <- predict.gbm(brt.model, 
+                                                 temp.node,
+                                                 n.trees = brt.model$gbm.call$best.trees, 
+                                                 type="response")
+                        prevalence <- sum(brt.model$data$y) / length(brt.model$data$y)
+                        prediction.matrix[, boot] <- plogis(qlogis(pass.prob) - qlogis(prevalence))
                         
                 }
                 
