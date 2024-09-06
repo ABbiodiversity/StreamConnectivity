@@ -8,7 +8,7 @@
 #
 
 #########
-# Notes # 
+# Notes # CLEAN UP FAVORABILITY CALCULATION
 #########~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 # 1) All paths defined in this script are local
@@ -22,9 +22,13 @@ rm(list=ls())
 gc()
 
 # Load libraries
+library(caret)
+library(dismo)
 library(foreach)
 library(foreign)
+library(gbm)
 library(parallel)
+library(PresenceAbsence)
 
 # Source functions
 source("src/culvert-passability_functions.R")
@@ -67,10 +71,11 @@ model.data$RoadClass[model.data$FeatureType %in% c("FORD-WINTER-XING", "ROAD-UNC
                                                    "TRUCK-TRAIL")] <- "Unimproved"
 model.data$RoadClass <- factor(model.data$RoadClass)
 
-# Filter the model data to include only surveys post 2018. This is done because the landscape we are using is 
-# based on the 2018 road network. Culverts older than that may have been fixed, while newer surveys may still 
-# represent that status of the watershed a few years ago seeing as we don't have many reclaimed culverts in the data.
-model.data <- model.data[model.data$SurveyDate > "2018-01-01", ]
+# # Now that we have footprint and distance for each year, so all surveys
+# # Filter the model data to include only surveys post 2018. This is done because the landscape we are using is 
+# # based on the 2018 road network. Culverts older than that may have been fixed, while newer surveys may still 
+# # represent that status of the watershed a few years ago seeing as we don't have many reclaimed culverts in the data.
+# model.data <- model.data[model.data$SurveyDate > "2018-01-01", ]
 
 # Test the model using the full variable list, then use gbm.simplify to simplify the object. 
 # After testing is completed, use the single best model for the bootstrap iterations
@@ -97,7 +102,7 @@ brt.models <- parLapply(core.input,
                         as.list(1:100),
                         fun = function(boot) tryCatch(brt_function(data = model.data,
                                                                    boot = boot,
-                                                                   path = "results/hanging-culvert-model/version-4/bootstrap/"), 
+                                                                   path = "results/hanging-culvert-model/version-5/bootstrap/"), 
                                                       error = function(e) e))
         
 
@@ -105,12 +110,17 @@ brt.models <- parLapply(core.input,
 stopCluster(core.input)
 
 # Create the confusion matrix for the first model
-load("results/hanging-culvert-model/version-4/bootstrap/hanging-culvert-model_1.Rdata")
+load("results/hanging-culvert-model/version-5/bootstrap/hanging-culvert-model_1.Rdata")
 model.data$Prediction <- predict.gbm(brt.model, model.data,
                                      n.trees = brt.model$gbm.call$best.trees, type="response")
 
+# Assessing if convert to favorability is reasonable
+model.data$Favorability <- plogis( qlogis(model.data$Prediction) - qlogis(0.9229339))
+
 # We use the MaxSens+Spec threshold approach as it is a more conservative threshold compared to Kappa.
 # It incorrectly predicts more hanging culverts when not present, but has high accuracy is predicting known hanging culverts.
+# This approach is minimizing the number of false negatives (hanging culvert is predicted to be passable)
+# and is okay if that results in more passable culverts being identified as hanging.
 pass.threshold <- optimal.thresholds(model.data[, c("Node", "Passability", "Prediction")],
                                      threshold = 101,
                                      opt.methods = "MaxSens+Spec")$Prediction
@@ -121,11 +131,12 @@ confusion.matrix <- confusionMatrix(data = factor(ifelse(model.data$Prediction >
 pROC::auc(model.data$Passability, model.data$Prediction)
 
 # Save the model output with the commented fit statistics
-comment(brt.models) <- paste0("100 Bootstrap iterations. First bootstrap uses full dataset; ",
+comment(brt.model) <- paste0("100 Bootstrap iterations. First bootstrap uses full dataset; ",
+                             "AUC = ", round(pROC::auc(model.data$Passability, model.data$Prediction), 3), "; ",
                               "Accuracy = ", round(confusion.matrix$overall["Accuracy"], 3), "; ",
                               "Kappa = ", round(confusion.matrix$overall["Kappa"], 3), 
-                              "; Created July 15, 2024")
-save(brt.models, pass.threshold, confusion.matrix, file = "results/hanging-culvert-model/version-4/hanging-culvert-model-stats.Rdata")
+                              "; Created September 2, 2024")
+save(brt.model, pass.threshold, confusion.matrix, file = "results/hanging-culvert-model/version-5/hanging-culvert-model-stats.Rdata")
 
 ####################
 # Model Assessment # 
@@ -142,7 +153,8 @@ library(ggplot2)
 library(sf)
 
 # Load hanging culvert model 
-load("results/hanging-culvert-model/version-4/hanging-culvert-model.Rdata")
+load("results/hanging-culvert-model/version-5/bootstrap/hanging-culvert-model_1.Rdata")
+load("results/hanging-culvert-model/version-5/hanging-culvert-model-stats.Rdata")
 
 # Define analysis year
 huc.scale <- 6
@@ -155,8 +167,6 @@ watershed.average <- data.frame(Watershed = watershed.ids,
                                 NCulverts = NA,
                                 MeanPass = NA,
                                 BinaryPass = NA)
-
-brt.model <- brt.models[[1]]
 
 # Loop through each watershed to assess the distribution of hanging culverts throughout the province
 for(HUC in watershed.ids) {
@@ -218,7 +228,7 @@ colnames(watershed.average)[1] <- "HUC_6"
 # Save the predictions
 culvert.gis <- read_sf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.shp")
 culvert.gis <- merge.data.frame(culvert.gis, watershed.average, by = "HUC_6")
-write_sf(culvert.gis, dsn = "results/hanging-culvert-model/version-4/provincial-hanging-culvert-model.shp")
+write_sf(culvert.gis, dsn = "results/hanging-culvert-model/version-5/provincial-hanging-culvert-model.shp")
 
 # Load the previous hanging culvert model and assess fit between the two versions
 old.model <- read_sf("results/hanging-culvert-model/version-1/provincial-culvert-model_2021-06-04.shp")
@@ -230,6 +240,9 @@ new.model <- culvert.gis[, c("HUC_6", "NCulverts", "MeanPass", "BinaryPass")]
 new.model <- new.model[!duplicated(new.model), ]
 colnames(new.model) <- c("HUC_6", "NCulvertsV3", "MeanPassV3", "BinaryPassV3")
 culvert.predictions <- merge.data.frame(old.model, new.model, by = "HUC_6")
+
+# Difference 
+culvert.predictions$Difference <- culvert.predictions$MeanPassV3 - culvert.predictions$MeanPass
 
 
 # Compare the two types of predictions (mean probability versus threshold probabilities)
@@ -273,7 +286,7 @@ watershed.ids <- read.dbf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.dbf"
 watershed.ids <- unique(as.character(watershed.ids$HUC_6))
 
 # Define path for the bootstrap models
-boot.list <- list.files("results/hanging-culvert-model/version-4/bootstrap/", full.names = TRUE)
+boot.list <- list.files("results/hanging-culvert-model/version-5/bootstrap/", full.names = TRUE)
 
 # Define the cores and objects required for for parallel processing
 n.clusters <- 14
