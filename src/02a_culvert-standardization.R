@@ -1,7 +1,7 @@
 #
 # Title: Standardizing the culvert data
 # Created: March 31st, 2023
-# Last Updated: July 1st, 2024
+# Last Updated: September 1st, 2024
 # Author: Brandon Allen
 # Objectives: Standardize the culvert data from various sources in preparation for modeling
 # Keywords: Notes, Standardization, Extraction from matching, Culvert Predictions
@@ -86,18 +86,29 @@ wcp <- wcp[, c("FID", "INSP_DATE", "Project", "POINT_Y", "POINT_X", "STR_CLASS",
 colnames(wcp) <- c("SurveyID", "SurveyDate", "Project", "Latitude", "Longitude", "StreamClass", "Passability", "PassabilityConcern")
 wcp <- wcp[!duplicated(wcp[, -1]), ] # Remove duplicated calls
 
+#
+# Published Literature
+# 
+
+published.surveys <- read.csv("data/base/culvert-surveys/literature/published-literature.csv")
+published.surveys$InspectionDate <- as.Date(published.surveys$InspectionDate, format = "%m/%d/%Y")
+published.surveys <- published.surveys[, c("CulvertID", "InspectionDate", "Project", "Lat", "Long", "StreamType", "Passability", "PassabilityConcern")]
+colnames(published.surveys) <- c("SurveyID", "SurveyDate", "Project", "Latitude", "Longitude", "StreamClass", "Passability", "PassabilityConcern")
+published.surveys <- published.surveys[!is.na(published.surveys$Latitude), ] # Remove one survey without location
+
 # Stitch the data together
 culvert.data <- rbind.data.frame(woodlands.north, national.parks)
+culvert.data <- rbind.data.frame(culvert.data, published.surveys)
 culvert.data <- rbind.data.frame(culvert.data, wcp)
 
 # Save as R object and spatial file
-comment(culvert.data) <- "Culvert data was cleaned and filtered on May 18th, 2023"
+comment(culvert.data) <- "Culvert data was cleaned and filtered on August 29th, 2024"
 save(culvert.data, file = "data/processed/culverts/culvert-surveys-cleaned.Rdata")
 rm(list=ls())
 gc()
 
 ############################
-# Extraction from matching # Extracts need to occur for each version of the HFI analyzed
+# Extraction from matching # Extracts need to occur for each version of the HFI analyzed. Need to FIX!
 ############################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Clear memory
@@ -125,38 +136,15 @@ arcpy <- import('arcpy')
 # Define parallel processing factor
 arcpy$env$parallelProcessingFactor <- "100%"
 
-# If there are locations with multiple samples (duplicated lat/long combinations) select the most recent year
-# If there multiple surveys were done at the same location, pick the first record
-duplicate.list <- culvert.data[duplicated(culvert.data[, c("Latitude", "Longitude")]), ]
-duplicate.list <- duplicate.list[!duplicated(duplicate.list[, c("Latitude", "Longitude")]), ]
-
-for (location.id in 1:nrow(duplicate.list)) {
-        
-        # Pull out all values with matching lat/long
-        duplicate.point <- culvert.data[culvert.data$Latitude == duplicate.list$Latitude[location.id] & culvert.data$Longitude == duplicate.list$Longitude[location.id], ]
-        
-        # Identify which to remove (oldest records)
-        duplicate.point <- duplicate.point[duplicate.point$SurveyDate != max(duplicate.point$SurveyDate),]
-        
-        # If we have no points, it means there were multiple surveys at the location
-        if(nrow(duplicate.point) == 0) {
-               
-                # Pull out all values with matching lat/long
-                duplicate.point <- culvert.data[culvert.data$Latitude == duplicate.list$Latitude[location.id] & culvert.data$Longitude == duplicate.list$Longitude[location.id], ]
-                
-                
-        } 
-        
-        # In case there were multiple values
-        duplicate.point <- duplicate.point[1, ] # Pick first record
-
-        # Remove duplicates
-        culvert.data <- culvert.data[!(culvert.data$SurveyID %in% duplicate.point$SurveyID), ]
-        
-}
+# Identify the year classes for extracting the culvert inspection data
+culvert.data$YearGroup <- format(culvert.data$SurveyDate,"%Y")
+culvert.data$YearGroup[culvert.data$YearGroup %in% c(2003:2011)] <- 2010
+culvert.data$YearGroup[culvert.data$YearGroup %in% c(2012:2015)] <- 2014
+culvert.data$YearGroup[culvert.data$YearGroup %in% c(2016:2017)] <- 2016
+culvert.data$YearGroup[culvert.data$YearGroup %in% c(2022)] <- 2021
 
 # Create the spatial file
-head(culvert.data)
+# This is required for the ArcGIS matching
 culvert.spatial <- st_as_sf(x = culvert.data, coords = c("Longitude", "Latitude"),
                             crs = "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")
 culvert.spatial <- st_transform(culvert.spatial, crs = st_crs(3400))
@@ -166,109 +154,147 @@ write_sf(culvert.spatial, dsn = "data/processed/culverts/culvert-surveys-cleaned
 watershed.ids <- read.dbf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.dbf")
 watershed.ids <- unique(as.character(watershed.ids$HUC_6))
 huc.scale <- 6
-hfi.year <- 2021
+hfi.year <- sort(unique(culvert.data$YearGroup))
 culvert.attributes <- NULL
 
-for(HUC in watershed.ids) {
+for (year in hfi.year) {
         
-        # Load the appropriate Rdata with the culvert information
-        load(paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                    hfi.year, "/connectivity/network_", HUC, ".Rdata"))
-        
-        # If there are culverts in the watershed, proceed with the match
-        if(is.null(watershed.network[["Edge_Cleaned"]])) {
+        for(HUC in watershed.ids) {
                 
-                next()
+                # Load the appropriate Rdata with the culvert information
+                load(paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
+                            year, "/connectivity/network_", HUC, ".Rdata"))
                 
-        }
-        
-        # Define the workspace
-        arcpy$env$workspace <- paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                                      hfi.year, "/gis/", HUC, ".gdb")
-        
-        # Clip culvert to the boundary of interest
-        arcpy$PairwiseClip_analysis(in_features = paste0(getwd(), "/data/processed/culverts/culvert-surveys-cleaned.shp"),  
-                                    clip_features = "watershed_boundary", 
-                                    out_feature_class = "survey_temp.shp")
-        
-        # Join the two culvert data sets
-        arcpy$SpatialJoin_analysis(target_features = "Culverts", 
-                                   join_features = paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                                                          hfi.year, "/gis/survey_temp.shp"), 
-                                   join_operation = "JOIN_ONE_TO_MANY", 
-                                   join_type = "KEEP_COMMON",
-                                   match_option = "WITHIN_A_DISTANCE_GEODESIC",
-                                   search_radius = "50 Meters",
-                                   out_feature_class = "Culverts_temp.shp")
-        
-        # Read the data in culvert data and merge with Rdata file
-        matching.culverts <- read.dbf(paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                                             hfi.year, "/gis/Culverts_temp.dbf"))
-        
-        # Add catch for no surveys in the watershed
-        if(nrow(matching.culverts) == 0) {
+                # If there are culverts in the watershed, proceed with the match
+                if(is.null(watershed.network[["Edge_Cleaned"]])) {
+                        
+                        next()
+                        
+                }
+                
+                # Define the workspace
+                arcpy$env$workspace <- paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
+                                              year, "/gis/", HUC, ".gdb")
+                
+                # Clip culvert to the boundary of interest
+                arcpy$PairwiseClip_analysis(in_features = paste0(getwd(), "/data/processed/culverts/culvert-surveys-cleaned.shp"),  
+                                            clip_features = "watershed_boundary", 
+                                            out_feature_class = "survey_temp.shp")
+                
+                # Join the two culvert data sets
+                arcpy$SpatialJoin_analysis(target_features = "Culverts", 
+                                           join_features = paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
+                                                                  year, "/gis/survey_temp.shp"), 
+                                           join_operation = "JOIN_ONE_TO_MANY", 
+                                           join_type = "KEEP_COMMON",
+                                           match_option = "WITHIN_A_DISTANCE_GEODESIC",
+                                           search_radius = "50 Meters",
+                                           out_feature_class = "Culverts_temp.shp")
+                
+                # Read the data in culvert data and merge with Rdata file
+                matching.culverts <- read.dbf(paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
+                                                     year, "/gis/Culverts_temp.dbf"))
+                
+                # Subset to include only the years up until the focal year (i.e., completed surveys)
+                matching.culverts <- matching.culverts[as.character(matching.culverts$YearGrp) <= year, ]
+                
+                # Add catch for no surveys in the watershed
+                if(nrow(matching.culverts) == 0) {
+                        
+                        # Remove the temporary data
+                        arcpy$Delete_management(in_data = c( paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
+                                                                    year, "/gis/survey_temp.shp"),
+                                                             paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
+                                                                    year, "/gis/Culverts_temp.shp")))
+                        
+                        print(HUC)
+                        
+                        # Skip
+                        next()
+                        
+                }
+                
+                matching.culverts$Node <- paste0(matching.culverts$StreamID_1, "-", matching.culverts$StreamID)
+                matching.culverts <- matching.culverts[, c("Node", "SurvyDt", "StrmCls", "Pssblty", "PssbltC", "YearGrp")]
+                colnames(matching.culverts) <- c("Node", "SurveyDate", "StreamClass", "Passability", "PassabilityConcern", "YearGroup")
+                
+                # There will be some culverts with multiple potential surveys. 
+                # Use the most recent culvert survey within the viable subset.
+                
+                duplicated.surveys <- unique(matching.culverts$Node[duplicated(matching.culverts$Node)])
+                
+                for(survey in duplicated.surveys) {
+                        
+                        # Store copy of surveys
+                        copy.surveys <- matching.culverts[matching.culverts$Node == survey, ]
+                        
+                        # Remove from main file
+                        matching.culverts <- matching.culverts[matching.culverts$Node != survey, ]
+                        
+                        # Isolate most recent survey. If multiple, pick the first one
+                        copy.surveys <- copy.surveys[copy.surveys$SurveyDate == max(copy.surveys$SurveyDate), ]
+                        copy.surveys <- copy.surveys[1, ]
+                        
+                        # Rebind to the data
+                        matching.culverts <- rbind(matching.culverts, copy.surveys)
+                        
+                }
+                
+                # Merge with the original watershed data
+                watershed.network$Edge_Cleaned <- merge.data.frame(watershed.network$Edge_Cleaned, 
+                                                                   matching.culverts, by = "Node", all = TRUE)
+                
+                save(watershed.network, file = paste0(getwd(), "/data/processed/huc-", huc.scale, "/",
+                                                      year, "/connectivity/network_", HUC, ".Rdata"))
+                
+                # Create subset for culvert modeling
+                # This needs to avoid duplicate years. So only select culverts within the matching YearGroup
+                culvert.temp <- watershed.network$Edge_Cleaned[!is.na(watershed.network$Edge_Cleaned$SurveyDate), ]
+                culvert.temp$HUC <- HUC
+                culvert.temp <- culvert.temp[culvert.temp$YearGroup == year, ]
+
+                culvert.attributes <- rbind(culvert.attributes, culvert.temp)
+                
+                rm(culvert.temp)
                 
                 # Remove the temporary data
                 arcpy$Delete_management(in_data = c( paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                                                            hfi.year, "/gis/survey_temp.shp"),
+                                                            year, "/gis/survey_temp.shp"),
                                                      paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                                                            hfi.year, "/gis/Culverts_temp.shp")))
+                                                            year, "/gis/Culverts_temp.shp")))
                 
                 print(HUC)
                 
-                # Skip
-                next()
-                
         }
         
-        matching.culverts$Node <- paste0(matching.culverts$StreamID_1, "-", matching.culverts$StreamID)
-        matching.culverts <- matching.culverts[, c("Node", "SurvyDt", "StrmCls", "Pssblty", "PssbltC")]
-        colnames(matching.culverts) <- c("Node", "SurveyDate", "StreamClass", "Passability", "PassabilityConcern")
-        
-        # There will be some culverts with multiple potential surveys. Take the most recent matching one
-        duplicated.surveys <- unique(matching.culverts$Node[duplicated(matching.culverts$Node)])
-        
-        for(survey in duplicated.surveys) {
-                
-                # Store copy of surveys
-                copy.surveys <- matching.culverts[matching.culverts$Node == survey, ]
-                
-                # Remove from main file
-                matching.culverts <- matching.culverts[matching.culverts$Node != survey, ]
-                
-                # Isolate most recent survey. If multiple, pick the first one
-                copy.surveys <- copy.surveys[copy.surveys$SurveyDate == max(copy.surveys$SurveyDate), ]
-                copy.surveys <- copy.surveys[1, ]
-                
-                # Rebind to the data
-                matching.culverts <- rbind(matching.culverts, copy.surveys)
-                
-        }
-        
-        # Merge with the original watershed data
-        watershed.network$Edge_Cleaned <- merge.data.frame(watershed.network$Edge_Cleaned, 
-                                                           matching.culverts, by = "Node", all = TRUE)
-        
-        save(watershed.network, file = paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                                              hfi.year, "/connectivity/network_", HUC, ".Rdata"))
-        
-        # Create subset for culvert modeling
-        culvert.temp <- watershed.network$Edge_Cleaned[!is.na(watershed.network$Edge_Cleaned$SurveyDate), ]
-        culvert.temp$HUC <- HUC
-        
-        culvert.attributes <- rbind(culvert.attributes, culvert.temp)
-        
-        rm(culvert.temp)
-
-        # Remove the temporary data
-        arcpy$Delete_management(in_data = c( paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                                                    hfi.year, "/gis/survey_temp.shp"),
-                                             paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
-                                                    hfi.year, "/gis/Culverts_temp.shp")))
-        
-        print(HUC)
+        print(year)
         
 }
 
-comment(culvert.attributes) <- "Culvert data was matched with GIS attributes on July 9th, 2024"
+# As we are extracting the information for each year, we then need to subset the final culvert set.
+# For each culvert with multiple surveys, pick the latest year.
+
+duplicated.surveys <- unique(culvert.attributes$Node[duplicated(paste0(culvert.attributes$Node, "_",
+                                                                       culvert.attributes$HUC))])
+
+for(survey in duplicated.surveys) {
+        
+        # Store copy of surveys
+        copy.surveys <- culvert.attributes[culvert.attributes$Node == survey, ]
+        
+        # Remove from main file
+        culvert.attributes <- culvert.attributes[culvert.attributes$Node != survey, ]
+        
+        # Isolate most recent survey. If multiple, pick the first one
+        copy.surveys <- copy.surveys[copy.surveys$SurveyDate == max(copy.surveys$SurveyDate), ]
+        copy.surveys <- copy.surveys[1, ]
+        
+        # Rebind to the data
+        culvert.attributes <- rbind(culvert.attributes, copy.surveys)
+        
+        rm(copy.surveys)
+        
+}
+
+comment(culvert.attributes) <- "Culvert data was matched with GIS attributes on September 2nd, 2024"
 save(culvert.attributes, file = "data/processed/culverts/culvert-model-attributes.Rdata")
