@@ -3,7 +3,7 @@
 # author: "Brandon Allen"
 # created: "2025-01-11"
 # inputs: ["0_data/external/roadrail-centerlines/2010-2021 HFI centrelines"]
-# outputs: ["0_data/processed/stream-network/stream_network_standardized.shp"]
+# outputs: ["0_data/processed/centerline-network/centerline_hfi.shp"]
 # notes: 
 #   "This script standardizes the roads and rail centreline features available in the ABMI HFI inventories."
 # ---
