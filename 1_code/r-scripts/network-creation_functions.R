@@ -296,8 +296,7 @@ def autoIncrement():
 
                 # Save the output
                 watershed.network <- list(Node = node.data)
-                save(watershed.network, file = paste0("data/processed/huc-", huc.scale, 
-                                                      "/", hfi.year, "/connectivity/",
+                save(watershed.network, file = paste0(analysis.path,
                                                       "network_",  huc.unit, ".Rdata"))
                 
         } else {
