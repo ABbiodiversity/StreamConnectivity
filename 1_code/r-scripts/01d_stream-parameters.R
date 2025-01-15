@@ -69,6 +69,7 @@ gc()
 # 2.1 Load libraries and source functions ----
 library(foreach)
 library(foreign)
+library(igraph)
 library(parallel)
 source("1_code/r-scripts/stream-parameters_functions.R")
 
@@ -123,40 +124,7 @@ stopCluster(core.input)
 
 # 3.0 Upstream Distance ----
 
-# 3.1 Clear memory ----
-rm(list=ls())
-gc()
-
-# 3.2 Load libraries and source functions ----
-library(foreach)
-library(foreign)
-library(igraph)
-library(parallel)
-source("src/stream-parameters_functions.R")
-
-# 3.2 Define the focal years that HFI are available for pro
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021)
-
-# 3.3 Define HUC scale and valid watershed ids
-huc.scale <- 6
-if(huc.scale == 6) {
-        
-        huc.layer <- paste0("0_data/external/watersheds/boundary/HUC_",
-                            8,
-                            "_EPSG3400.dbf")
-        watershed.ids <- read.dbf(huc.layer)
-        
-} else {
-        
-        huc.layer <- paste0("0_data/external/watersheds/boundary/HUC_",
-                            huc.unit,
-                            "_EPSG3400.dbf")
-        watershed.ids <- read.dbf(huc.layer)
-}
-
-watershed.ids <- unique(as.character(watershed.ids[, paste0("HUC_", huc.scale)]))
-
-# 3.4 Define the cores and objects required for for parallel processing ----
+# 3.1 Define the cores and objects required for for parallel processing ----
 n.clusters <- 14
 core.input <- makeCluster(n.clusters)
 clusterExport(core.input, c("huc.scale", "watershed.ids", "hfi.series",
@@ -171,7 +139,7 @@ clusterEvalQ(core.input, {
         
 })
 
-# 3.5 Loop through each watershed and available centerline inventory ----
+# 3.2 Loop through each watershed and available centerline inventory ----
 foreach(hfi = hfi.series) %dopar% 
         
         parLapply(core.input, 
