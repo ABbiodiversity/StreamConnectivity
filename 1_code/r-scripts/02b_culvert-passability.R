@@ -366,7 +366,7 @@ foreach(hfi = hfi.series) %dopar%
         
         parLapply(core.input, 
                   watershed.ids, 
-                  fun = function(huc) tryCatch(culvert_survey(path = paste0(getwd(), "/data/processed/huc-", huc.scale, "/", 
+                  fun = function(huc) tryCatch(culvert_survey(path = paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
                                                                             hfi, "/connectivity/network_", huc, ".Rdata"),
                                                               hfi = hfi,
                                                               boot.path = boot.list), error = function(e) e)
