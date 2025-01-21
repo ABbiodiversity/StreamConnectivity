@@ -466,7 +466,6 @@ upstream_distance <- function(edge.network, node.network, culvert.id) {
 #' @param [conversion] [If the nodes have both upstream and downstream edges (edge1-edge2), string is split before passed to igraph.]
 #' @return [Returns the igraph network object.]
 #' 
-#' 
 
 network_visualization <- function(edge.network, conversion) {
         
