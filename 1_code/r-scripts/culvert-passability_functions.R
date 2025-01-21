@@ -18,7 +18,6 @@
 #' @return [Saves individual model objects to the designated file path.]
 #' 
 
-# Define the bootstrap function
 brt_function <- function(data = model.data,
                          boot = boot,
                          response.variable = "Passability",
@@ -80,7 +79,14 @@ culvert_survey <- function(path = NA,
         # If path is NA, throw warning
         if(is.na(path)) {
                 
-                return("No path defined")
+                return("No path defined.")
+                
+        }
+        
+        # If file does not exists, throw warning
+        if(!file.exists(path)) {
+                
+                return("File does not exist.")
                 
         }
         
