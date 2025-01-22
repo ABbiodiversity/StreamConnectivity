@@ -4,7 +4,8 @@
 # created: "2025-01-12"
 # inputs: ["0_data/external/watersheds/boundary/HUC_8_EPSG3400.dbf";
 #          "network_HUC.Rdata - One for each year and HUC watershed"]
-# outputs: ["network_HUC.Rdata - One for each year and HUC watershed. d)j"]
+# outputs: ["network_HUC.Rdata - One for each year and HUC watershed. 
+#           "autocorrelation.distance"]
 # notes: 
 #   "This script assesses the mean distance between each segment and other stream order types."
 # ---
