@@ -5,7 +5,9 @@
 # inputs: ["3_output/summaries/shapefiles/connectivity_hfi_2018.shp";
 #          "3_output/shapefiles/previous-version/provincial-watershed-connectivity_2021-07-14.shp"]
 # outputs: ["3_output/figures/spatial-version-comparison-2018HFI.jpeg";
-#           "3_output/figures/version-comparison-2018HFI.jpeg"]
+#           "3_output/figures/version-comparison-2018HFI.jpeg";
+#           "3_output/figures/version-temporal-change-2018HFI.jpeg";
+#           "3_output/figures/survey-effort-comparison.jpeg"]
 # notes: 
 #   "This script performs the comparison between the current version and any previous version of the indicator.
 #    We use the 2018 HFI as our "baseline" year as it is available for all versions and has some culvert data available for it".
