@@ -3,14 +3,13 @@
 # author: "Brandon Allen"
 # created: "2025-01-21"
 # inputs: ["network_HUC.Rdata - One for each year and HUC watershed"]
-# outputs: ["3_output/tables/summaries/connectivity_hfi_[year].Rdata";
-#           "3_output/summaries/shapefiles/connectivity_hfi_[year].shp"]
+# outputs: ["network_HUC.Rdata - One for each year and HUC watershed" (Processed Connectivity tables)]
 # notes: 
 #   "Using the available culvert surveys, predicted passability, and network information for each watershed,
 #    calculate regional stream connectivity."
 # ---
 
-# 1.0 Initializing envrionment ----
+# 1.0 Initializing environment ----
 
 # 1.1 Clear memory ----
 rm(list=ls())
