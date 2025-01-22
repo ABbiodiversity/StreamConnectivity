@@ -6,9 +6,9 @@
 #          "0_data/external/culvert-surveys/national-park/parks-canada-culverts_2021-04-07.csv";
 #          "0_data/external//culvert-surveys/watercourse-crossing-program/inspections_2023-03-31.xlsx";
 #          "0_data/external/culvert-surveys/literature/published-literature.csv"]
-# outputs: ["0_data/processed/culverts/culvert-surveys-cleaned.Rdata";
-#           "0_data/processed/culverts/culvert-model-attributes.Rdata";
-#           "0_data/processed/culverts/culvert-surveys-cleaned.shp"]
+# outputs: ["2_pipeline/culverts/culvert-surveys-cleaned.Rdata";
+#           "2_pipeline/culverts/culvert-model-attributes.Rdata";
+#           "2_pipeline/culverts/culvert-surveys-cleaned.shp"]
 # notes: 
 #   "Standardize the culvert data from various sources in preparation for modeling."
 # ---
@@ -107,7 +107,7 @@ culvert.data <- rbind.data.frame(culvert.data, published.surveys)
 culvert.data <- rbind.data.frame(culvert.data, wcp)
 culvert.data <- rbind.data.frame(culvert.data, wcp.new)
 comment(culvert.data) <- "Culvert data was cleaned and filtered on January 12th, 2025"
-save(culvert.data, file = "0_data/processed/culverts/culvert-surveys-cleaned.Rdata")
+save(culvert.data, file = "2_pipeline/culverts/culvert-surveys-cleaned.Rdata")
 
 # 2.0 Extract surveys from matching inventory ----
 
@@ -119,7 +119,7 @@ gc()
 library(foreign)
 library(reticulate)
 library(sf)
-load("0_data/processed/culverts/culvert-surveys-cleaned.Rdata")
+load("2_pipeline/culverts/culvert-surveys-cleaned.Rdata")
 
 # 2.3 Initialize arcpy ----
 py_discover_config() # We need version 3.9
@@ -146,7 +146,7 @@ culvert.data$YearGroup[culvert.data$YearGroup %in% c(2022, 2023, 2024)] <- 2021
 culvert.spatial <- st_as_sf(x = culvert.data, coords = c("Longitude", "Latitude"),
                             crs = "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")
 culvert.spatial <- st_transform(culvert.spatial, crs = st_crs(3400))
-write_sf(culvert.spatial, dsn = "0_data/processed/culverts/culvert-surveys-cleaned.shp")
+write_sf(culvert.spatial, dsn = "2_pipeline/culverts/culvert-surveys-cleaned.shp")
 
 # 2.6 Loop through each watershed using the most recent HFI inventory ----
 watershed.ids <- read.dbf("0_data/external/watersheds/boundary/HUC_8_EPSG3400.dbf")
@@ -161,7 +161,7 @@ for (year in hfi.year) {
         for(HUC in watershed.ids) {
                 
                 # Load the appropriate Rdata with the culvert information
-                load(paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+                load(paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                             year, "/connectivity/network_", HUC, ".Rdata"))
                 
                 # If there are culverts in the watershed, proceed with the match
@@ -172,17 +172,17 @@ for (year in hfi.year) {
                 }
                 
                 # Define the workspace
-                arcpy$env$workspace <- paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+                arcpy$env$workspace <- paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                               year, "/gis/", HUC, ".gdb")
                 
                 # Clip culvert to the boundary of interest
-                arcpy$PairwiseClip_analysis(in_features = paste0(getwd(), "/0_data/processed/culverts/culvert-surveys-cleaned.shp"),  
+                arcpy$PairwiseClip_analysis(in_features = paste0(getwd(), "/2_pipeline/culverts/culvert-surveys-cleaned.shp"),  
                                             clip_features = "watershed_boundary", 
                                             out_feature_class = "survey_temp.shp")
                 
                 # Join the two culvert data sets
                 arcpy$SpatialJoin_analysis(join_features = "Culverts", 
-                                           target_features = paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+                                           target_features = paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                                                   year, "/gis/survey_temp.shp"), 
                                            join_operation = "JOIN_ONE_TO_MANY", 
                                            join_type = "KEEP_COMMON",
@@ -192,7 +192,7 @@ for (year in hfi.year) {
                                            distance_field_name = "Distance")
                 
                 # Read the data in culvert data and merge with Rdata file
-                matching.culverts <- read.dbf(paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+                matching.culverts <- read.dbf(paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                                      year, "/gis/Culverts_temp.dbf"))
                 
                 # Subset to include only the years up until the focal year (i.e., completed surveys)
@@ -202,9 +202,9 @@ for (year in hfi.year) {
                 if(nrow(matching.culverts) == 0) {
                         
                         # Remove the temporary data
-                        arcpy$Delete_management(in_data = c( paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+                        arcpy$Delete_management(in_data = c( paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                                                     year, "/gis/survey_temp.shp"),
-                                                             paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+                                                             paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                                                     year, "/gis/Culverts_temp.shp")))
                         
                         print(HUC)
@@ -251,7 +251,7 @@ for (year in hfi.year) {
                 watershed.network$Edge_Surveys <- merge.data.frame(watershed.network$Edge_Cleaned, 
                                                                    matching.culverts, by = "Node", all = TRUE)
                 
-                save(watershed.network, file = paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/",
+                save(watershed.network, file = paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/",
                                                       year, "/connectivity/network_", HUC, ".Rdata"))
                 
                 # Create subset for culvert modeling
@@ -265,9 +265,9 @@ for (year in hfi.year) {
                 rm(culvert.temp)
                 
                 # Remove the temporary data
-                arcpy$Delete_management(in_data = c( paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+                arcpy$Delete_management(in_data = c( paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                                             year, "/gis/survey_temp.shp"),
-                                                     paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+                                                     paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                                             year, "/gis/Culverts_temp.shp")))
                 
                 print(HUC)
@@ -302,7 +302,7 @@ for(survey in duplicated.surveys) {
 
 # 2.8 Save results
 comment(culvert.attributes) <- "Culvert data was matched with GIS attributes on January 12th, 2025"
-save(culvert.attributes, file = "0_data/processed/culverts/culvert-model-attributes.Rdata")
+save(culvert.attributes, file = "2_pipeline/culverts/culvert-model-attributes.Rdata")
 
 rm(list=ls())
 gc()

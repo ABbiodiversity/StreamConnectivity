@@ -59,7 +59,7 @@ foreach(hfi = hfi.series) %dopar%
                                                                     hfi = hfi,
                                                                     Autocorrelation.d0 = Autocorrelation.d0,
                                                                     culvert.model = "ModelMean",
-                                                                    path.in = paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+                                                                    path.in = paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                                                                   hfi, "/connectivity/network_", huc, ".Rdata")), 
                                                error = function(e) e)
         )
@@ -74,7 +74,7 @@ foreach(hfi = hfi.series) %dopar%
                                                                     hfi = hfi,
                                                                     Autocorrelation.d0 = Autocorrelation.d0,
                                                                     culvert.model = "ModelUpper",
-                                                                    path.in = paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+                                                                    path.in = paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                                                                      hfi, "/connectivity/network_", huc, ".Rdata")), 
                                                error = function(e) e)
         )
@@ -89,7 +89,7 @@ foreach(hfi = hfi.series) %dopar%
                                                                     hfi = hfi,
                                                                     Autocorrelation.d0 = Autocorrelation.d0,
                                                                     culvert.model = "ModelLower",
-                                                                    path.in = paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+                                                                    path.in = paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                                                                      hfi, "/connectivity/network_", huc, ".Rdata")), 
                                                error = function(e) e)
         )

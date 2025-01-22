@@ -29,7 +29,7 @@ huc.scale <- 6
 # 2.0 Yearly Summaries ----
 for (hfi.year in hfi.series) {
         
-        results.list <- list.files(paste0("0_data/processed/huc-", huc.scale, "/", 
+        results.list <- list.files(paste0("2_pipeline/huc-", huc.scale, "/", 
                                           hfi.year, "/connectivity/"), full.names = TRUE)
         
         # Create temporary geospatial object for storing results

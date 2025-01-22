@@ -2,7 +2,7 @@
 # title: "Modeling Hanging Culvert Passability"
 # author: "Brandon Allen"
 # created: "2025-01-13"
-# inputs: ["0_data/processed/culverts/culvert-model-attributes.Rdata";
+# inputs: ["2_pipeline/culverts/culvert-model-attributes.Rdata";
 #          "0_data/external/watersheds/boundary/HUC_8_EPSG3400.shp;
 #          "network_HUC.Rdata - One for each year and HUC watershed"]
 # outputs: ["3_output/hanging-culvert-model/version-4/hanging-culvert-model-stats.Rdata";
@@ -31,7 +31,7 @@ library(ggpubr)
 library(MetBrewer)
 library(PresenceAbsence)
 library(sf)
-load("0_data/processed/culverts/culvert-model-attributes.Rdata")
+load("2_pipeline/culverts/culvert-model-attributes.Rdata")
 
 # 1.3 Filter the culvert data to include only hanging culverts and passable culverts ----
 culvert.attributes <- culvert.attributes[culvert.attributes$Class == "Culvert", ] # Only use culverts
@@ -129,7 +129,7 @@ watershed.average <- data.frame(Watershed = watershed.ids,
 for(HUC in watershed.ids) {
         
         # Load the appropriate Rdata with the culvert information
-        load(paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+        load(paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                     hfi.year, "/connectivity/network_", HUC, ".Rdata"))
         
         # If there are culverts in the watershed, proceed with the match
@@ -229,7 +229,7 @@ library(dismo)
 library(gbm)
 library(PresenceAbsence)
 source("1_code/r-scripts/culvert-passability_functions.R")
-load("0_data/processed/culverts/culvert-model-attributes.Rdata")
+load("2_pipeline/culverts/culvert-model-attributes.Rdata")
 
 # 2.3 Filter the culvert data to include only hanging culverts and passable culverts ----
 culvert.attributes <- culvert.attributes[culvert.attributes$Class == "Culvert", ] # Only use culverts
@@ -366,7 +366,7 @@ foreach(hfi = hfi.series) %dopar%
         
         parLapply(core.input, 
                   watershed.ids, 
-                  fun = function(huc) tryCatch(culvert_survey(path = paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+                  fun = function(huc) tryCatch(culvert_survey(path = paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                                                             hfi, "/connectivity/network_", huc, ".Rdata"),
                                                               hfi = hfi,
                                                               boot.path = boot.list), error = function(e) e)

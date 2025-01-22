@@ -133,7 +133,7 @@ foreach(hfi = hfi.series) %dopar%
                                                                         watershed.layer = huc.layer,
                                                                         huc.scale = huc.scale,
                                                                         huc.unit = huc,
-                                                                        folder.name = "0_data/processed/", 
+                                                                        folder.name = "2_pipeline", 
                                                                         arcpy = arcpy), error = function(e) e)
         )
 

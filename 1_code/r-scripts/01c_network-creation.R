@@ -101,7 +101,7 @@ foreach(hfi = hfi.series) %dopar%
                                                                 AT.bridges = paste0(getwd(), "/0_data/external/bridges/alberta-transportation/Bridges-20m-3400_2019.shp"), 
                                                                 NP.rail.bridges = paste0(getwd(), "/0_data/external/bridges/access-layer/railway-bridges-np-20m_2020.shp"),
                                                                 NP.road.bridges = paste0(getwd(), "/0_data/external/bridges/access-layer/road-bridges-np-20m_2020.shp"),
-                                                                folder.name = "0_data/processed/",
+                                                                folder.name = "2_pipeline",
                                                                 arcpy = arcpy), error = function(e) e)
 
         )

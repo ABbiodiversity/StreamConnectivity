@@ -25,7 +25,7 @@ for (hfi in hfi.series) {
         for (watershed in watershed.id) {
                 
                 # Load watershed
-                load(paste0("0_data/processed/huc-6/", hfi, "/connectivity/network_", 
+                load(paste0("2_pipeline/huc-6/", hfi, "/connectivity/network_", 
                             watershed, ".Rdata"))
                 watershed.edge <- watershed.network$Edge
                 
@@ -52,7 +52,7 @@ for (hfi in hfi.series) {
                 
                 # Save
                 watershed.network$Edge <- watershed.edge
-                save(watershed.network, file = paste0("0_data/processed/huc-6/", hfi, 
+                save(watershed.network, file = paste0("2_pipeline/huc-6/", hfi, 
                                                       "/connectivity/network_", 
                                                       watershed, ".Rdata"))
                 
@@ -114,7 +114,7 @@ foreach(hfi = hfi.series) %dopar%
         
         parLapply(core.input, 
                   watershed.ids, 
-                  fun = function(huc) tryCatch(stream_confluence(watershed.path = paste0("0_data/processed/huc-6/", hfi, 
+                  fun = function(huc) tryCatch(stream_confluence(watershed.path = paste0("2_pipeline/huc-6/", hfi, 
                                                                                          "/connectivity/network_", 
                                                                                          huc, ".Rdata")), 
                                                error = function(e) e)
@@ -144,7 +144,7 @@ foreach(hfi = hfi.series) %dopar%
         
         parLapply(core.input, 
                   watershed.ids, 
-                  fun = function(huc) tryCatch(stream_distance(watershed.path = paste0("0_data/processed/huc-6/", hfi, 
+                  fun = function(huc) tryCatch(stream_distance(watershed.path = paste0("2_pipeline/huc-6/", hfi, 
                                                                                          "/connectivity/network_", 
                                                                                          huc, ".Rdata")), 
                                                error = function(e) e)

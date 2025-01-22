@@ -37,7 +37,7 @@ for (HUC in watershed.ids) {
         ##################
         
         # Load the appropriate Rdata with the culvert information
-        load(paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+        load(paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                     hfi.year, "/connectivity/network_", HUC, ".Rdata"))
         
         # If there are no culverts in the watershed, skip the summary. 
@@ -109,7 +109,7 @@ for (HUC in watershed.ids) {
         colnames(autocorrelation.distance) <- c("StreamID", "HabitatType", "Distance") 
         watershed.network[["d_j"]] <- autocorrelation.distance
         
-        save(watershed.network, file = paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+        save(watershed.network, file = paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                               hfi.year, "/connectivity/network_", HUC, ".Rdata"))
         print(HUC)
 }
@@ -120,7 +120,7 @@ for (HUC in watershed.ids) {
 for (HUC in watershed.ids) { 
         
         # Load the appropriate Rdata with the culvert information
-        load(paste0(getwd(), "/0_data/processed/huc-", huc.scale, "/", 
+        load(paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                     hfi.year, "/connectivity/network_", HUC, ".Rdata"))
         
         autocorrelation.distance <- rbind(watershed.network$d_j, autocorrelation.distance)
