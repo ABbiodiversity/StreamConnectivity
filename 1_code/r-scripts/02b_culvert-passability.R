@@ -189,14 +189,6 @@ spatial.plot <- ggplot() +
         ggtitle("Hanging Culvert Model (Version 4)") +
         theme_light()
 
-ggsave(filename = paste0("3_output/figures/hanging-culvert-model_v4.jpeg"), 
-       plot = spatial.plot,
-       height = 900,
-       width = 600, 
-       dpi = 72,
-       quality = 100,
-       units = "px")
-
 # 1.7 Version Comparison ----
 previous.version <- read_sf("3_output/hanging-culvert-model/version-1/provincial-culvert-model_2021-06-04.shp")
 
