@@ -25,14 +25,13 @@ source("1_code/r-scripts/connectivity-status_functions.R")
 # 1.3 Define scale, region, and years for processing. ----
 watershed.ids <- read.dbf("0_data/external/watersheds/boundary/HUC_8_EPSG3400.dbf")
 watershed.ids <- as.character(unique(watershed.ids$HUC_6)) # Includes all HUC-6 watersheds now
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022)
 huc.scale <- 6
 
 # 1.4 Define spatial autocorrelation variable ----
 # Mean distance of first order streams to highest order stream segment
 # HUC 6 - 71000, based on results from 02c_autocorrelation-distance.R
 Autocorrelation.d0 <- 71000 
-
 
 # 2.0 Parallel processing of stream connectivity ----
 
@@ -79,7 +78,7 @@ foreach(hfi = hfi.series) %dopar%
                                                error = function(e) e)
         )
 
-# 2.2 Calculate connectivity based on upper culvert predictions (lower 10%) ----
+# 2.4 Calculate connectivity based on lower culvert predictions (lower 10%) ----
 foreach(hfi = hfi.series) %dopar% 
         
         parLapply(core.input, 

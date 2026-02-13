@@ -4,7 +4,8 @@
 # created: "2025-01-11"
 # inputs: ["0_data/external/culvert-surveys/woodlands-north/woodlands-sampling_2019-11-07.csv";
 #          "0_data/external/culvert-surveys/national-park/parks-canada-culverts_2021-04-07.csv";
-#          "0_data/external//culvert-surveys/watercourse-crossing-program/inspections_2023-03-31.xlsx";
+#          "0_data/external/culvert-surveys/watercourse-crossing-program/inspections_2023-03-31.xlsx";
+#          "0_data/external/mapping/provincial-boundary.Rdata";
 #          "0_data/external/culvert-surveys/literature/published-literature.csv"]
 # outputs: ["2_pipeline/culverts/culvert-surveys-cleaned.Rdata";
 #           "2_pipeline/culverts/culvert-model-attributes.Rdata";
@@ -19,7 +20,9 @@
 rm(list=ls())
 gc()
 
-# 1.2 Load libraries----
+# 1.2 Load libraries ----
+library(ggplot2)
+require(ggnewscale)
 library(readxl)
 library(sf)
 
@@ -28,8 +31,9 @@ woodlands.north <- read.csv("0_data/external/culvert-surveys/woodlands-north/woo
 woodlands.north$SurveyID <- 1:nrow(woodlands.north)
 woodlands.north$SurveyDate <- as.Date("2019-10-01") # Performed fall of 2019
 woodlands.north$Project <- "WoodlandsNorth"
-woodlands.north <- woodlands.north[, c("SurveyID", "SurveyDate", "Project", "Lat", "Long", "Stream.Class", "Fish.Passage.Concern", "Fish.Passage.Concern.Reason")]
-colnames(woodlands.north) <- c("SurveyID", "SurveyDate", "Project", "Latitude", "Longitude", "StreamClass", "Passability", "PassabilityConcern")
+woodlands.north <- woodlands.north[, c("SurveyID", "SurveyDate", "Project", "Lat", "Long", "Stream.Class", "Crossing.Type", "Fish.Passage.Concern", "Fish.Passage.Concern.Reason")]
+colnames(woodlands.north) <- c("SurveyID", "SurveyDate", "Project", "Latitude", "Longitude", "StreamClass", "CrossingType", "Passability", "PassabilityConcern")
+woodlands.north$CrossingType <- "Culvert" # All crossing are culverts, so relabel for alignment with other sources.
 woodlands.north$Passability[woodlands.north$Passability == "NULL"] <- NA
 woodlands.north$PassabilityConcern[woodlands.north$PassabilityConcern == "NULL"] <- NA
 woodlands.north$PassabilityConcern[woodlands.north$PassabilityConcern == "Hanging culvert"] <- "Hanging Culvert"
@@ -42,8 +46,8 @@ national.parks <- read.csv("0_data/external/culvert-surveys/national-park/parks-
 national.parks$SurveyDate <- as.Date("2008-08-04") # Performed summer of 2008
 national.parks$StreamClass <- "Small permanent" # Assumed permanent 
 national.parks$Project <- "NationalParks"
-national.parks <- national.parks[, c("OBJECTID", "SurveyDate", "Project", "ycoord", "xcoord", "StreamClass", "Passability", "PassabilityConcern")]
-colnames(national.parks) <- c("SurveyID", "SurveyDate", "Project", "Latitude", "Longitude", "StreamClass", "Passability", "PassabilityConcern")
+national.parks <- national.parks[, c("OBJECTID", "SurveyDate", "Project", "ycoord", "xcoord", "StreamClass", "CROSSINGTY", "Passability", "PassabilityConcern")]
+colnames(national.parks) <- c("SurveyID", "SurveyDate", "Project", "Latitude", "Longitude", "StreamClass", "CrossingType", "Passability", "PassabilityConcern")
 national.parks <- national.parks[!duplicated(national.parks[, -1]), ] # Remove duplicated calls
 
 # 1.5 Watercourse Crossing Program  surveys (up to 2023) ----
@@ -71,8 +75,8 @@ wcp$PassabilityConcern[wcp$PassabilityConcern %in% "Hanging Culvert" & !(wcp$BLK
 wcp$BLK_TRASH[is.na(wcp$BLK_TRASH)] <- "No" # Trash blockages
 wcp$PassabilityConcern[wcp$PassabilityConcern %in% "Hanging Culvert" & !(wcp$BLK_TRASH %in% c("no", "No", "null"))] <- "Concerns"
 wcp$Project <- "WCP"
-wcp <- wcp[, c("FID", "INSP_DATE", "Project", "POINT_Y", "POINT_X", "STR_CLASS", "Passability", "PassabilityConcern")] # Filter survey columns
-colnames(wcp) <- c("SurveyID", "SurveyDate", "Project", "Latitude", "Longitude", "StreamClass", "Passability", "PassabilityConcern")
+wcp <- wcp[, c("FID", "INSP_DATE", "Project", "POINT_Y", "POINT_X", "STR_CLASS", "CROSS_TYPE", "Passability", "PassabilityConcern")] # Filter survey columns
+colnames(wcp) <- c("SurveyID", "SurveyDate", "Project", "Latitude", "Longitude", "StreamClass", "CrossingType", "Passability", "PassabilityConcern")
 wcp <- wcp[!duplicated(wcp[, -1]), ] # Remove duplicated calls
 
 # 1.6 Watercourse Crossing Program  surveys (Post 2023-01-24) ----
@@ -83,6 +87,7 @@ wcp.new$INSP_DATE <- as.Date(wcp.new$INSP_DATE) # Keep only inspection dates pos
 wcp.new <- wcp.new[wcp.new$INSP_DATE > "2023-01-24", ]
 wcp.new <- wcp.new[wcp.new$INSP_DATE != "2101-04-08", ]
 wcp.new <- wcp.new[!is.na(wcp.new$FISHPCONC), ] # Keep only inspections with fish passability information
+wcp.new <- wcp.new[!is.na(wcp.new$FISHPCONC), ] # Keep only information on culverts
 wcp.new <- wcp.new[wcp.new$FISHPCONC %in% c("Concerns", "No Concerns"), ]
 wcp.new$Project <- "WCP"
 wcp.new$STR_CLASS <- NA
@@ -90,24 +95,50 @@ wcp.new$Passability <- wcp.new$FISHPCONC # If "Hanging" is found in the comments
 wcp.new$PassabilityConcern <- NA
 wcp.new$PassabilityConcern[grep("Hanging", wcp.new$REMARKS)] <- "Hanging Culvert"
 wcp.new$Passability[wcp.new$PassabilityConcern == "Hanging Culvert" & !is.na(wcp.new$PassabilityConcern)] <- "Concerns"
-wcp.new <- wcp.new[, c("FID", "INSP_DATE", "Project", "POINT_Y", "POINT_X", "STR_CLASS", "Passability", "FISHPCONC")] # Filter survey columns
-colnames(wcp.new) <- c("SurveyID", "SurveyDate", "Project", "Latitude", "Longitude", "StreamClass", "Passability", "PassabilityConcern")
+wcp.new <- wcp.new[, c("FID", "INSP_DATE", "Project", "POINT_Y", "POINT_X", "STR_CLASS", "CROSS_TYPE", "Passability", "PassabilityConcern")] # Filter survey columns
+colnames(wcp.new) <- c("SurveyID", "SurveyDate", "Project", "Latitude", "Longitude", "StreamClass", "CrossingType", "Passability", "PassabilityConcern")
 wcp.new <- wcp.new[!duplicated(wcp.new[, -1]), ] # Remove duplicated calls
 
 # 1.7 Published Literature surveys ----
 published.surveys <- read.csv("0_data/external/culvert-surveys/literature/published-literature.csv")
 published.surveys$InspectionDate <- as.Date(published.surveys$InspectionDate, format = "%m/%d/%Y")
-published.surveys <- published.surveys[, c("CulvertID", "InspectionDate", "Project", "Lat", "Long", "StreamType", "Passability", "PassabilityConcern")]
-colnames(published.surveys) <- c("SurveyID", "SurveyDate", "Project", "Latitude", "Longitude", "StreamClass", "Passability", "PassabilityConcern")
+published.surveys <- published.surveys[, c("CulvertID", "InspectionDate", "Project", "Lat", "Long", "StreamType", "CulvertType", "Passability", "PassabilityConcern")]
+colnames(published.surveys) <- c("SurveyID", "SurveyDate", "Project", "Latitude", "Longitude", "StreamClass", "CrossingType", "Passability", "PassabilityConcern")
 published.surveys <- published.surveys[!is.na(published.surveys$Latitude), ] # Remove one survey without location
 
-# 1.8 Stitch the data together and save ----
+# 1.8 Stitch the data together, remove blank surveys, and save ----
 culvert.data <- rbind.data.frame(woodlands.north, national.parks)
 culvert.data <- rbind.data.frame(culvert.data, published.surveys)
 culvert.data <- rbind.data.frame(culvert.data, wcp)
 culvert.data <- rbind.data.frame(culvert.data, wcp.new)
-comment(culvert.data) <- "Culvert data was cleaned and filtered on January 12th, 2025"
+culvert.data <- culvert.data[!(culvert.data$CrossingType %in% c("No crossing present", "Unknown")), ]
+comment(culvert.data) <- "Culvert data was cleaned and filtered on April 8th, 2025"
 save(culvert.data, file = "2_pipeline/culverts/culvert-surveys-cleaned.Rdata")
+
+# 1.9 Visualization ----
+load("0_data/external/mapping/provincial-boundary.Rdata")
+
+# Create basic figure structure
+culvert.geom <- st_as_sf(x = culvert.data,                         
+               coords = c("Longitude", "Latitude"),
+               crs = "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")
+
+occ.plot <- ggplot() + 
+        geom_sf(data = province.shapefile, aes(color = NRNAME, fill = NRNAME), show.legend = FALSE) +
+        scale_fill_manual(values =  alpha(province.shapefile$Color, 0.2)) +
+        scale_color_manual(values =  alpha(province.shapefile$Color, 0.1)) +
+        new_scale_color() +
+        new_scale_fill() +
+        geom_sf(data = culvert.geom, show.legend = FALSE)
+
+ggsave(filename = "3_output/figures/culvert-surveys.jpeg",
+       plot = occ.plot,
+       height = 800,
+       width = 600,
+       dpi = 72,
+       quality = 100,
+       units = "px")
+
 
 # 2.0 Extract surveys from matching inventory ----
 
@@ -122,8 +153,8 @@ library(sf)
 load("2_pipeline/culverts/culvert-surveys-cleaned.Rdata")
 
 # 2.3 Initialize arcpy ----
-py_discover_config() # We need version 3.9
-py_config() # Double check it is version 3.9
+# py_discover_config() # We need version 3.9
+# py_config() # Double check it is version 3.9
 
 # Set python 
 use_python(python = "C:/Users/ballen/AppData/Local/r-miniconda/envs/r-reticulate/python.exe")
@@ -140,7 +171,7 @@ culvert.data$YearGroup[culvert.data$YearGroup %in% c(2003:2010)] <- 2010
 culvert.data$YearGroup[culvert.data$YearGroup %in% c(2011:2013)] <- 2014
 culvert.data$YearGroup[culvert.data$YearGroup %in% 2015] <- 2016
 culvert.data$YearGroup[culvert.data$YearGroup %in% 2017] <- 2018
-culvert.data$YearGroup[culvert.data$YearGroup %in% c(2022, 2023, 2024)] <- 2021
+culvert.data$YearGroup[culvert.data$YearGroup %in% c(2022, 2023, 2024)] <- 2022
 
 # 2.5 Create the spatial file for matching ----
 culvert.spatial <- st_as_sf(x = culvert.data, coords = c("Longitude", "Latitude"),
@@ -215,8 +246,8 @@ for (year in hfi.year) {
                 }
                 
                 matching.culverts$Node <- paste0(matching.culverts$StreamID_1, "-", matching.culverts$StreamID)
-                matching.culverts <- matching.culverts[, c("Node", "Project", "SurvyDt", "StrmCls", "Pssblty", "PssbltC", "YearGrp", "SurvyID", "Distance")]
-                colnames(matching.culverts) <- c("Node", "Project","SurveyDate", "StreamClass", "Passability", "PassabilityConcern", "YearGroup", "SurveyID", "SurveyDistance")
+                matching.culverts <- matching.culverts[, c("Node", "Project", "SurvyDt", "StrmCls", "CrssngT", "Pssblty", "PssbltC", "YearGrp", "SurvyID", "Distance")]
+                colnames(matching.culverts) <- c("Node", "Project","SurveyDate", "StreamClass", "CrossingType", "Passability", "PassabilityConcern", "YearGroup", "SurveyID", "SurveyDistance")
                 
                 # Each culvert is assigned the closest feature. However, multiple culverts
                 # may be assigned.
@@ -301,7 +332,7 @@ for(survey in duplicated.surveys) {
 }
 
 # 2.8 Save results
-comment(culvert.attributes) <- "Culvert data was matched with GIS attributes on January 12th, 2025"
+comment(culvert.attributes) <- "Culvert data was matched with GIS attributes on June 20th, 2025"
 save(culvert.attributes, file = "2_pipeline/culverts/culvert-model-attributes.Rdata")
 
 rm(list=ls())

@@ -16,14 +16,11 @@ gc()
 
 # 1.1 Load libraries and source functions ----
 library(reticulate)
-source("1_code/r-scripts/stream-standardization_functions.R")
+source("1_code/r_scripts/stream-standardization_functions.R")
 
 # 1.2 Initialize reticulate to communicate with ArcPro
-py_discover_config() # We need version 3.7
-py_config() # Double check it is version 3.7
-
 # Set python version
-use_python(python = "C:/Users/ballen/AppData/Local/r-miniconda/envs/r-reticulate/python.exe")
+use_python(python = "C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
 
 # Load arcpy
 arcpy <- import('arcpy') 

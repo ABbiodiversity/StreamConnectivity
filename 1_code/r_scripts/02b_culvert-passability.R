@@ -5,9 +5,9 @@
 # inputs: ["2_pipeline/culverts/culvert-model-attributes.Rdata";
 #          "0_data/external/watersheds/boundary/HUC_8_EPSG3400.shp;
 #          "network_HUC.Rdata - One for each year and HUC watershed"]
-# outputs: ["3_output/hanging-culvert-model/version-4/hanging-culvert-model-stats.Rdata";
-#           "3_output/hanging-culvert-model/version-4/hanging-culvert-model.Rdata";
-#           "3_output/hanging-culvert-model/version-4/bootstrap/bootstrap models"]
+# outputs: ["3_output/hanging-culvert-model/version-2/hanging-culvert-model-stats.Rdata";
+#           "3_output/hanging-culvert-model/version-2/hanging-culvert-model.Rdata";
+#           "3_output/hanging-culvert-model/version-2/bootstrap/bootstrap models"]
 # notes: 
 #   "Using the available culvert survey information, create a passability model for hanging culverts.
 #    As the frequency of hanging culverts will change over time, we standardize the probability predictions
@@ -34,7 +34,7 @@ library(sf)
 load("2_pipeline/culverts/culvert-model-attributes.Rdata")
 
 # 1.3 Filter the culvert data to include only hanging culverts and passable culverts ----
-culvert.attributes <- culvert.attributes[culvert.attributes$Class == "Culvert", ] # Only use culverts
+culvert.attributes <- culvert.attributes[culvert.attributes$CrossingType %in% c("Culvert", "Culvert-single", "Culvert - Single", "Culvert-multiple"), ] # Using survey Crossing Type to isolate culverts
 culvert.attributes <- culvert.attributes[!(culvert.attributes$StreamClass %in% c("Cross drain", "Cross Drain")), ] # Remove Cross Drains
 
 # Format hanging culverts
@@ -57,42 +57,40 @@ rm(hanging.culvert, pass.culverts)
 model.data$CMI <- model.data$MAP - model.data$Eref
 
 # Total basin slope
-# Total Difference between max and point elevation, divided by total upstream distance from culvert
-model.data$BasinSlope <- (model.data$WatershedElevationMax - model.data$Elevation) / model.data$Distance
+# There are multiple starting points for the network, so this is no longer used
+# Total Difference between max and point elevation
+# model.data$BasinSlope <- (model.data$WatershedElevationMax - model.data$Elevation) / model.data$Distance
 
 # Convert distance from m to km
 model.data$Distance <- model.data$Distance / 1000
 
-# # These variables were evaluated, but didn't improve model fit substantially
-# # Reclassify the road data (Gravel, unimproved, paved?)
-# model.data$RoadClass <- "Paved"
-# model.data$RoadClass[model.data$FeatureType %in% c("ROAD-GRAVEL-1L", "ROAD-GRAVEL-2L",
-#                                                    "ROAD-UNPAVED-2L")] <- "Gravel"
-# model.data$RoadClass[model.data$FeatureType %in% c("FORD-WINTER-XING", "ROAD-UNCLASSIFIED",
-#                                                    "ROAD-UNIMPROVED", "ROAD-WINTER-ACCESS",
-#                                                    "ROAD-WINTER-ROAD", "TRAIL-ATV",
-#                                                    "TRUCK-TRAIL")] <- "Unimproved"
-# model.data$RoadClass <- factor(model.data$RoadClass)
-# 
-# # Factor natural region
-# model.data$NaturalRegion <- factor(model.data$NaturalRegion)
-# 
-# # Strahler Order
+# Strahler Order (Not included anymore)
+# Lakes, or greater than Strahler 4
+# model.data$Strahler[model.data$Strahler %in% c(-1, 4, 5, 6)] <- 4
 # model.data$Strahler <- factor(model.data$Strahler)
-# 
-# # Elevation difference (Max elevation - point)
-# model.data$Elevation.Diff <- model.data$WatershedElevationMax - model.data$Elevation
 
+# Total prevalence
+total.prevalence <- as.numeric(table(model.data$Passability)["1"]) / nrow(model.data)
 
 # 1.5 Boosted Regression Tree ----
 
+# High flow environments
 # Define coefficients 
 response.variable <- "Passability"
-coefficients <- c("SlopePoint", "Confluence",
-                  "Distance", "CMI", "BasinSlope")
+coefficients <- c("SlopePoint", "Confluence", "Distance", 
+                  "CMI", "DrainageDensity", "Elevation")
+
+trainIndex <- createDataPartition(model.data[, response.variable], 
+                                  p = 0.8, 
+                                  list = FALSE, 
+                                  times = 1)
+
+data.train <- model.data[trainIndex[,1], ]
+
+data.validate <- model.data[-trainIndex[,1], ]
 
 # Calculate the brt model
-brt.model <- gbm.step(data = model.data, gbm.x = coefficients, gbm.y = response.variable, 
+brt.model <- gbm.step(data = data.train, gbm.x = coefficients, gbm.y = response.variable, 
                       family = "bernoulli", tree.complexity = 5,
                       learning.rate = 0.001, bag.fraction = 0.5, n.folds = 10,
                       prev.stratify = TRUE, max.trees = 20000)
@@ -100,16 +98,16 @@ gbm.plot(brt.model)
 
 # Create the confusion matrix for reporting purposes
 # Make prediction
-model.data$Prediction <- predict.gbm(brt.model, model.data,
+data.validate$Prediction <- predict.gbm(brt.model, data.validate,
                             n.trees = brt.model$gbm.call$best.trees, type="response")
 
-pass.threshold <- optimal.thresholds(model.data[, c("Node", "Passability", "Prediction")],
+pass.threshold <- optimal.thresholds(data.validate[, c("Node", "Passability", "Prediction")],
                                      threshold = 101,
                                      opt.methods = "MaxKappa")$Prediction
 
-confusion.matrix <- confusionMatrix(data = factor(ifelse(model.data$Prediction >= pass.threshold, 1, 0)), 
-                                    reference = factor(model.data$Passability))
-pROC::auc(model.data$Passability, model.data$Prediction)
+confusion.matrix <- confusionMatrix(data = factor(ifelse(data.validate$Prediction >= pass.threshold, 1, 0)), 
+                                    reference = factor(data.validate$Passability))
+pROC::auc(data.validate$Passability, data.validate$Prediction)
 
 # 1.6 Provincial prediction ----
 
@@ -145,26 +143,19 @@ for(HUC in watershed.ids) {
         # Add CMI
         temp.node$CMI <- temp.node$MAP - temp.node$Eref
         
-        # Total stream slope
-        temp.node$BasinSlope <- (temp.node$WatershedElevationMax - temp.node$Elevation) / temp.node$Distance
-        
         # Convert distance from m to km
         temp.node$Distance <- temp.node$Distance / 1000
         
-        # Elevation difference (Max elevation - point)
-        temp.node$Elevation.Diff <- temp.node$WatershedElevationMax - temp.node$Elevation
-        
         # Make prediction
         temp.node$Up <- predict.gbm(brt.model, temp.node,
-                                    n.trees = brt.model$gbm.call$best.trees, type="link")
+                                    n.trees = brt.model$gbm.call$best.trees, type= "link")
         
         # Convert to favorability
-        prevalence <- sum(brt.model$data$y) / length(brt.model$data$y)
-        temp.node$Up <- plogis(temp.node$Up - qlogis(prevalence))
+        temp.node$Up <- plogis(temp.node$Up - qlogis(total.prevalence))
         
         # Subset the network to include only Culverts
         temp.node <- temp.node[!(temp.node$Class %in% c("Split", "Bridge")), ]
-        
+
         # Store the results
         watershed.average[watershed.average$Watershed == HUC, c("NCulverts", "MeanPass")] <- c(nrow(temp.node), 
                                                                                                mean(temp.node$Up))
@@ -185,18 +176,40 @@ culvert.gis <- merge(culvert.gis, watershed.average, by = "HUC_6")
 
 spatial.plot <- ggplot() +
         geom_sf(data = culvert.gis, aes(fill = MeanPass)) +
-        scale_fill_gradientn(name = paste0("Mean\nPassability"), colors = met.brewer(name = "Hiroshige", n = 100, type = "continuous"), guide = "colourbar") +
-        ggtitle("Hanging Culvert Model (Version 4)") +
-        theme_light()
+        scale_fill_gradientn(name = paste0("Mean\nPassability"), colors = met.brewer(name = "Hiroshige", n = 100, type = "continuous"), guide = "colourbar", limits = c(0.25,1)) +
+        ggtitle("Hanging Culvert Model (Version 2.0)") +
+        theme_light() +
+        theme(axis.title.x = element_blank(),
+              axis.title.y = element_blank(),
+              axis.text.x = element_text(size=18),
+              axis.text.y = element_text(size=18),
+              title = element_text(size=18),
+              legend.title = element_text(size=18),
+              legend.text = element_text(size=16),
+              panel.grid.major.y = element_blank(),
+              axis.line = element_line(colour = "black"),
+              panel.border = element_rect(colour = "black", fill=NA, size=1))
+
 
 # 1.7 Version Comparison ----
 previous.version <- read_sf("3_output/hanging-culvert-model/version-1/provincial-culvert-model_2021-06-04.shp")
 
 previous.version.plot <- ggplot() +
         geom_sf(data = previous.version, aes(fill = MeanPass)) +
-        scale_fill_gradientn(name = paste0("Mean\nPassability"), colors = met.brewer(name = "Hiroshige", n = 100, type = "continuous"), guide = "colourbar") +
-        ggtitle("Hanging Culvert Model (Version 1)") +
-        theme_light()
+        scale_fill_gradientn(name = paste0("Mean\nPassability"), colors = met.brewer(name = "Hiroshige", n = 100, type = "continuous"), guide = "colourbar", limits = c(0.25,1)) +
+        ggtitle("Hanging Culvert Model (Version 1.0)") +
+        theme_light() +
+        theme(axis.title.x = element_blank(),
+              axis.title.y = element_blank(),
+              axis.text.x = element_text(size=18),
+              axis.text.y = element_text(size=18),
+              title = element_text(size=18),
+              legend.title = element_text(size=18),
+              legend.text = element_text(size=16),
+              panel.grid.major.y = element_blank(),
+              axis.line = element_line(colour = "black"),
+              panel.border = element_rect(colour = "black", fill=NA, size=1))
+
 
 ggsave(filename = paste0("3_output/figures/hanging-culvert-model-comparison.jpeg"), 
        plot = ggarrange(previous.version.plot, spatial.plot, ncol = 2, nrow = 1),
@@ -205,9 +218,6 @@ ggsave(filename = paste0("3_output/figures/hanging-culvert-model-comparison.jpeg
        dpi = 72,
        quality = 100,
        units = "px")
-
-rm(list=ls())
-gc()
 
 # 2.0 Bootstrapped Models ----
 
@@ -218,13 +228,15 @@ gc()
 # 2.2 Load libraries, source functions, and culvert data ----
 library(caret)
 library(dismo)
+library(foreach)
 library(gbm)
+library(parallel)
 library(PresenceAbsence)
-source("1_code/r-scripts/culvert-passability_functions.R")
+source("1_code/r_scripts/culvert-passability_functions.R")
 load("2_pipeline/culverts/culvert-model-attributes.Rdata")
 
 # 2.3 Filter the culvert data to include only hanging culverts and passable culverts ----
-culvert.attributes <- culvert.attributes[culvert.attributes$Class == "Culvert", ] # Only use culverts
+culvert.attributes <- culvert.attributes[culvert.attributes$CrossingType %in% c("Culvert", "Culvert-single", "Culvert - Single", "Culvert-multiple"), ] # Using survey Crossing Type to isolate culverts
 culvert.attributes <- culvert.attributes[!(culvert.attributes$StreamClass %in% c("Cross drain", "Cross Drain")), ] # Remove Cross Drains
 
 # Format hanging culverts
@@ -246,10 +258,6 @@ rm(hanging.culvert, pass.culverts)
 # Climate Moisture Index (MAP - Eref)
 model.data$CMI <- model.data$MAP - model.data$Eref
 
-# Total basin slope
-# Total Difference between max and point elevation, divided by total upstream distance from culvert
-model.data$BasinSlope <- (model.data$WatershedElevationMax - model.data$Elevation) / model.data$Distance
-
 # Convert distance from m to km
 model.data$Distance <- model.data$Distance / 1000
 
@@ -257,16 +265,18 @@ model.data$Distance <- model.data$Distance / 1000
 
 # Define coefficients 
 response.variable <- "Passability"
-coefficients <- c("SlopePoint", "Confluence",
-                  "Distance", "CMI", "BasinSlope")
+coefficients <- c("SlopePoint", "Confluence", "Distance", 
+                  "CMI", "DrainageDensity", "Elevation")
 
 # Define the cores and objects required for for parallel processing
 n.clusters <- 14
 core.input <- makeCluster(n.clusters)
-clusterExport(core.input, c("model.data", "brt_function", "coefficients", "response.variable"))
+clusterExport(core.input, c("model.data", "brt_function", "coefficients", 
+                            "response.variable"))
 clusterEvalQ(core.input, {
         
         # Load libraries
+        library(caret)
         library(dismo)
         library(gbm)
         
@@ -279,45 +289,45 @@ brt.models <- parLapply(core.input,
                         fun = function(boot) tryCatch(brt_function(data = model.data,
                                                                    boot = boot,
                                                                    response.variable = response.variable, 
-                                                                   coefficients = coefficients,
-                                                                   path = "3_output/hanging-culvert-model/version-4/bootstrap/"), 
+                                                                   model.coef = coefficients,
+                                                                   training = 0.8,
+                                                                   path = "3_output/hanging-culvert-model/version-2/bootstrap/"), 
                                                       error = function(e) e))
 
 
 
 stopCluster(core.input)
 
-# Create the confusion matrix for the first model
-load("3_output/hanging-culvert-model/version-4/bootstrap/hanging-culvert-model_1.Rdata")
-model.data$Prediction <- predict.gbm(brt.model, model.data,
+# Create the confusion matrix for the first model (high elevation)
+load("3_output/hanging-culvert-model/version-2/bootstrap/hanging-culvert-model_1.Rdata")
+validate.data$Prediction <- predict.gbm(brt.model, validate.data,
                                      n.trees = brt.model$gbm.call$best.trees, type="link")
 
 # Assessing if convert to favorability is reasonable
-prevalence <- sum(brt.model$data$y) / length(brt.model$data$y)
-model.data$Favorability <- plogis(model.data$Prediction - qlogis(prevalence))
-model.data$Prediction <- plogis(model.data$Prediction)
+prevalence <- sum(model.data$Passability) / length(model.data$Passability)
+validate.data$Favorability <- plogis(validate.data$Prediction - qlogis(prevalence))
+validate.data$Prediction <- plogis(validate.data$Prediction)
 
 # We use the MaxSens+Spec threshold approach as it is a more conservative threshold compared to Kappa.
 # It incorrectly predicts more hanging culverts when not present, but has high accuracy is predicting known hanging culverts.
 # This approach is minimizing the number of false negatives (hanging culvert is predicted to be passable)
 # and is okay if that results in more passable culverts being identified as hanging.
-pass.threshold <- optimal.thresholds(model.data[, c("Node", "Passability", "Prediction", "Favorability")],
+pass.threshold <- optimal.thresholds(validate.data[, c("Node", "Passability", "Prediction", "Favorability")],
                                      threshold = 101,
                                      opt.methods = "MaxKappa")
 
 # Create the confusion matrix for reporting purposes
-confusion.matrix <- confusionMatrix(data = factor(ifelse(model.data$Prediction >= pass.threshold$Prediction, 1, 0)), 
-                                    reference = factor(model.data$Passability))
-pROC::auc(model.data$Passability, model.data$Prediction)
+confusion.matrix <- confusionMatrix(data = factor(ifelse(validate.data$Prediction >= pass.threshold$Prediction, 1, 0)), 
+                                    reference = factor(validate.data$Passability))
+pROC::auc(validate.data$Passability, validate.data$Prediction)
 
 # Save the model output with the commented fit statistics
 comment(brt.model) <- paste0("100 Bootstrap iterations. First bootstrap uses full dataset; ",
-                             "AUC = ", round(pROC::auc(model.data$Passability, model.data$Prediction), 3), "; ",
+                             "AUC = ", round(pROC::auc(validate.data$Passability, validate.data$Prediction), 3), "; ",
                              "Accuracy = ", round(confusion.matrix$overall["Accuracy"], 3), "; ",
                              "Kappa = ", round(confusion.matrix$overall["Kappa"], 3), 
-                             "; Created January 14, 2025")
-save(brt.model, pass.threshold, confusion.matrix, file = "3_output/hanging-culvert-model/version-4/hanging-culvert-model-stats.Rdata")
-
+                             "; Created June 20, 2025")
+save(brt.model, pass.threshold, confusion.matrix, file = "3_output/hanging-culvert-model/version-2/hanging-culvert-model-stats.Rdata")
 
 # 3.0 Provincial Predictions ----
 
@@ -333,12 +343,12 @@ source("1_code/r-scripts/culvert-passability_functions.R")
 
 # 3.3 Define watersheds and analysis years ----
 huc.scale <- 6
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021)
 watershed.ids <- read.dbf("0_data/external/watersheds/boundary/HUC_8_EPSG3400.dbf")
 watershed.ids <- unique(as.character(watershed.ids$HUC_6))
 
 # 3.4 Define bootstrap path and organize parallel processing ----
-boot.list <- list.files("3_output/hanging-culvert-model/version-4/bootstrap/", full.names = TRUE)
+boot.list <- list.files("3_output/hanging-culvert-model/version-2/bootstrap/", full.names = TRUE)
 
 # Define the cores and objects required for for parallel processing
 n.clusters <- 14
@@ -361,6 +371,7 @@ foreach(hfi = hfi.series) %dopar%
                   fun = function(huc) tryCatch(culvert_survey(path = paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
                                                                             hfi, "/connectivity/network_", huc, ".Rdata"),
                                                               hfi = hfi,
+                                                              survey.window = 2, 
                                                               boot.path = boot.list), error = function(e) e)
         )
 

@@ -13,7 +13,9 @@
 #' @param [data] [Cleaned hanging culvert data used for modeling.]
 #' @param [boot] [Number of bootstrap iterations.]
 #' @param [response.variable] [Response variable for the model "Passability".]
-#' @param [coefficients] [Coefficients used for predicting hanging culverts.]
+#' @param [high.elevation.coef] [Coefficients used for predicting hanging culverts in high elevation areas.]
+#' @param [low.elevation.coef] [Coefficients used for predicting hanging culverts in low elevation areas.]
+#' @param [training] [Proportion of data used for training the model.]
 #' @param [path] [File path for storing the individual models.]
 #' @return [Saves individual model objects to the designated file path.]
 #' 
@@ -21,7 +23,8 @@
 brt_function <- function(data = model.data,
                          boot = boot,
                          response.variable = "Passability",
-                         coefficients = NA,
+                         model.coef = NA,
+                         training = 0.8,
                          path = NA) {
         
         # If path is NA, throw warning
@@ -32,32 +35,45 @@ brt_function <- function(data = model.data,
         }
         
         # If coefficient is NA, throw warning
-        if(is.na(path)) {
+        if(is.na(model.coef[1])) {
                 
                 return("No coefficients defined for the model")
                 
         }
         
+
         # For the first bootstrap, use the original dataset
         if(boot != 1) {
                 
                 # Perform the boostrap sampling
-                data <- data[sample(1:nrow(data), 
-                                                nrow(data), replace=TRUE), ]
+                model.data <- model.data[sample(1:nrow(model.data), 
+                                                nrow(model.data), 
+                                                replace=TRUE), ]
                 
         }
         
-        # Calculate the brt model
-        response.variable <- (1:ncol(data))[colnames(data) %in% response.variable]
-        model.coef <- (1:ncol(data))[colnames(data) %in% coefficients]
+        # Partition the data into training and validation data
+        trainIndex <- createDataPartition(model.data[, response.variable], 
+                                          p = training, 
+                                          list = FALSE, 
+                                          times = 1)
         
-        brt.model <- gbm.step(data = data, gbm.x = model.coef, gbm.y = response.variable, 
+        train.data <- model.data[trainIndex[,1], ]
+        
+        validate.data <- model.data[-trainIndex[,1], ]
+        
+        # Calculate the brt model
+        response.coef <- (1:ncol(train.data))[colnames(train.data) %in% response.variable]
+        model.coef <- (1:ncol(train.data))[colnames(train.data) %in% model.coef]
+        
+        brt.model <- gbm.step(data = train.data, gbm.x = model.coef, gbm.y = response.coef, 
                               family = "bernoulli", tree.complexity = 5,
                               learning.rate = 0.001, bag.fraction = 0.5, n.folds = 10,
                               prev.stratify = TRUE, max.trees = 20000)
         
         # Save the output
-        save(brt.model, file = paste0(path, "hanging-culvert-model_", boot, ".Rdata"))
+        save(brt.model, train.data, validate.data, 
+             file = paste0(path, "hanging-culvert-model_", boot, ".Rdata"))
         
 }
 
@@ -67,6 +83,7 @@ brt_function <- function(data = model.data,
 #'
 #' @param [path] [Path to the individual R objects that store the processed network "e.g., network_HUC.Rdata".]
 #' @param [hfi] [Analysis year.]
+#' @param [survey.window] [Number of years prior to analysis year for including/excluding culvert surveys.]
 #' @param [boot.path] [File paths for the bootstrap hanging culvert models.]
 #' @return [Saves a new data frame to the original object "Edge_Predicted".]
 #' 
@@ -74,6 +91,7 @@ brt_function <- function(data = model.data,
 
 culvert_survey <- function(path = NA,
                            hfi = NA,
+                           survey.window = 5,
                            boot.path = NA) {
         
         # If path is NA, throw warning
@@ -114,10 +132,6 @@ culvert_survey <- function(path = NA,
                 # CMI
                 temp.node$CMI <- temp.node$MAP - temp.node$Eref
                 
-                # Total basin slope
-                # Total Difference between max and point elevation, divided by total upstream distance from culvert
-                temp.node$BasinSlope <- (temp.node$WatershedElevationMax - temp.node$Elevation) / temp.node$Distance
-                
                 # Convert distance from m to km
                 temp.node$Distance <- temp.node$Distance / 1000
                 
@@ -125,15 +139,18 @@ culvert_survey <- function(path = NA,
                 bridge.split.logical <- temp.node$Class %in% c("Split", "Bridge")
                 temp.node$Up[bridge.split.logical] <- 1
                 
-                # Use all surveys prior to the focal year
+                # If culvert is damaged, we assume it stays damaged unless a revisit happens.
+                # If passable, we will default to the hanging culvert model if no revisit occurs within the survey.window
                 # As we have already removed duplicate surveys, this is simple a doublecheck 
                 # there aren't stray culverts.
                 survey.logical <- !is.na(temp.node$SurveyDate)
                 
                 # Identify culverts of concern
                 concerns.logical <- temp.node$Passability %in% c("Serious Concerns", "Concerns", "Some Concerns")
-                no.concerns.logical <- temp.node$Passability %in% c("No Concerns")
-                
+                no.concerns.logical <- temp.node$Passability %in% c("No Concerns") & 
+                        as.numeric(format(temp.node$SurveyDate,"%Y")) >= (hfi - survey.window) &
+                        as.numeric(format(temp.node$SurveyDate,"%Y")) <= (hfi)
+                 
                 # If there are no surveys present, default to a FALSE logical
                 if(length(survey.logical) == 0) {
                         
@@ -163,17 +180,23 @@ culvert_survey <- function(path = NA,
                                                    !survey.logical & 
                                                    !(mineable.logical)] <- TRUE
                 
+                # Force surveys that occurred outside the moving window to default to the model
+                temp.node$ModelPassability[as.numeric(format(temp.node$SurveyDate,"%Y")) < (hfi - survey.window)] <- TRUE
+                
                 # For each of the bootstrap iterations, create the 90% confidence interval
-                prediction.matrix <- matrix(data = NA, ncol = 100, nrow = nrow(temp.node))
+                prediction.matrix <- matrix(data = NA, ncol = length(boot.path), nrow = nrow(temp.node))
                 for(boot in 1:length(boot.path)) {
                         
                         # Load the boosted regression tree
                         load(boot.path[boot])
                         
+                        # Model prediction
                         pass.prob <- predict.gbm(brt.model, 
                                                  temp.node,
                                                  n.trees = brt.model$gbm.call$best.trees, 
                                                  type="link")
+                
+                        # Stitch the probabilities based on the natural regions
                         prevalence <- sum(brt.model$data$y) / length(brt.model$data$y)
                         prediction.matrix[, boot] <- plogis(pass.prob - qlogis(prevalence))
                         

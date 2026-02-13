@@ -16,10 +16,10 @@ gc()
 library(foreach)
 library(foreign)
 library(parallel)
-source("1_code/r-scripts/linear-features_functions.R")
+source("1_code/r_scripts/linear-features_functions.R")
 
 # 1.2 Define the focal years that HFI are available for processing
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021) 
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022) 
 
 # 2.0 Linear feature standardization ----
 
@@ -34,12 +34,8 @@ clusterEvalQ(core.input, {
         library(foreign)
         library(reticulate)
         
-        # Initialize arcpy
-        py_discover_config() # We need version 3.9
-        py_config() # Double check it is version 3.9
-        
         # Set python 
-        use_python(python = "C:/Users/ballen/AppData/Local/r-miniconda/envs/r-reticulate/python.exe")
+        use_python(python = "C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
         
         # Load arcpy
         arcpy <- import('arcpy') 
@@ -90,20 +86,19 @@ watershed.ids <- unique(as.character(watershed.ids[, paste0("HUC_", huc.scale)])
 # 3.2 Define the path for the standardized stream network
 stream.path <- "0_data/processed/stream-network/stream_network_standardized.shp"
 
-# 3.3 Define the cores and objects required for for parallel processing ----
+# 3.3 Create to-do list for parallel processing ----
+todo.list <- expand.grid(hfi = hfi.series, huc = watershed.ids)
+
+# 3.4 Define the cores and objects required for for parallel processing ----
 n.clusters <- 14
 core.input <- makeCluster(n.clusters)
-clusterExport(core.input, c("huc.scale", "watershed.ids", "hfi.series",
+clusterExport(core.input, c("huc.scale", "watershed.ids", "todo.list",
                             "huc.layer", "stream.path", "linearfeature_subsetting"))
 clusterEvalQ(core.input, {
         
         # Load libraries
         library(foreign)
         library(reticulate)
-        
-        # Initialize arcpy
-        py_discover_config() # We need version 3.9
-        py_config() # Double check it is version 3.9
         
         # Set python 
         use_python(python = "C:/Users/ballen/AppData/Local/r-miniconda/envs/r-reticulate/python.exe")
@@ -118,24 +113,28 @@ clusterEvalQ(core.input, {
         
 })
 
-# 3.4 Generate the geodatabases for processing ----
+# 3.5 Generate the geodatabases for processing ----
 
-foreach(hfi = hfi.series) %dopar% 
-        
-        parLapply(core.input, 
-                  as.list(watershed.ids), 
-                  fun = function(huc) tryCatch(linearfeature_subsetting(centerline.layer = paste0(getwd(), 
-                                                                                                 "/0_data/processed/centerline-network/centerlines_", 
-                                                                                                 hfi, ".shp"),
-                                                                        stream.layer = paste0(getwd(),
-                                                                                              "/", stream.path),
-                                                                        hfi.year = hfi,
-                                                                        watershed.layer = huc.layer,
-                                                                        huc.scale = huc.scale,
-                                                                        huc.unit = huc,
-                                                                        folder.name = "2_pipeline", 
-                                                                        arcpy = arcpy), error = function(e) e)
-        )
+parLapply(core.input, 
+          as.list(rownames(todo.list)), 
+          fun = function(task) {
+                  
+                  # Identify HUC and HFI for the task
+                  hfi <- todo.list[task, "hfi"]
+                  huc <- todo.list[task, "huc"]
+                  
+                  tryCatch(linearfeature_subsetting(centerline.layer = paste0(getwd(), 
+                                                                              "/0_data/processed/centerline-network/centerlines_", 
+                                                                              hfi, ".shp"),
+                                                    stream.layer = paste0(getwd(),
+                                                                          "/", stream.path),
+                                                    hfi.year = hfi,
+                                                    watershed.layer = huc.layer,
+                                                    huc.scale = huc.scale,
+                                                    huc.unit = huc,
+                                                    folder.name = "2_pipeline", 
+                                                    arcpy = arcpy), error = function(e) e)}
+)
 
 stopCluster(core.input)
 

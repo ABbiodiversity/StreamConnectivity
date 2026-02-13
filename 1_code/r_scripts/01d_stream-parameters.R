@@ -16,7 +16,7 @@ rm(list=ls())
 gc()
 
 # 1.2 Define the focal watersheds that need to be repaired ----
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021) # Define HFI years 
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022) # Define HFI years 
 watershed.id <- c("080304", "040306", "110403", "230101")
 
 # 1.3 Repair each watershed ----
@@ -74,7 +74,7 @@ library(parallel)
 source("1_code/r-scripts/stream-parameters_functions.R")
 
 # 2.2 Define the focal years that HFI are available for processing
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022)
 
 # 2.3 Define HUC scale and valid watershed ids
 huc.scale <- 6
@@ -95,10 +95,13 @@ if(huc.scale == 6) {
 
 watershed.ids <- unique(as.character(watershed.ids[, paste0("HUC_", huc.scale)]))
 
-# 2.4 Define the cores and objects required for for parallel processing ----
+# 2.4 Create to-do list for parallel processing ----
+todo.list <- expand.grid(hfi = hfi.series, huc = watershed.ids)
+
+# 2.5 Define the cores and objects required for for parallel processing ----
 n.clusters <- 14
 core.input <- makeCluster(n.clusters)
-clusterExport(core.input, c("huc.scale", "watershed.ids", "hfi.series",
+clusterExport(core.input, c("huc.scale", "watershed.ids", "todo.list",
                             "stream_confluence", "stream_slope"))
 clusterEvalQ(core.input, {
         
@@ -110,15 +113,21 @@ clusterEvalQ(core.input, {
 })
 
 # 2.5 Loop through each watershed and available centerline inventory ----
-foreach(hfi = hfi.series) %dopar% 
-        
-        parLapply(core.input, 
-                  watershed.ids, 
-                  fun = function(huc) tryCatch(stream_confluence(watershed.path = paste0("2_pipeline/huc-6/", hfi, 
-                                                                                         "/connectivity/network_", 
-                                                                                         huc, ".Rdata")), 
-                                               error = function(e) e)
-        )
+parLapply(core.input, 
+          rownames(todo.list), 
+          fun = function(task) {
+                  
+                  # Identify HUC and HFI for the task
+                  hfi <- todo.list[task, "hfi"]
+                  huc <- todo.list[task, "huc"]
+                  
+                  tryCatch(stream_confluence(watershed.path = paste0("2_pipeline/huc-6/", hfi, 
+                                                                     "/connectivity/network_", 
+                                                                     huc, ".Rdata")), 
+                           error = function(e) e)
+                  
+          } 
+)
 
 stopCluster(core.input)
 
@@ -127,7 +136,7 @@ stopCluster(core.input)
 # 3.1 Define the cores and objects required for for parallel processing ----
 n.clusters <- 14
 core.input <- makeCluster(n.clusters)
-clusterExport(core.input, c("huc.scale", "watershed.ids", "hfi.series",
+clusterExport(core.input, c("huc.scale", "watershed.ids", "todo.list",
                             "stream_distance", "upstream_distance", "network_visualization"))
 clusterEvalQ(core.input, {
         
@@ -140,15 +149,21 @@ clusterEvalQ(core.input, {
 })
 
 # 3.2 Loop through each watershed and available centerline inventory ----
-foreach(hfi = hfi.series) %dopar% 
-        
-        parLapply(core.input, 
-                  watershed.ids, 
-                  fun = function(huc) tryCatch(stream_distance(watershed.path = paste0("2_pipeline/huc-6/", hfi, 
-                                                                                         "/connectivity/network_", 
-                                                                                         huc, ".Rdata")), 
-                                               error = function(e) e)
-        )
+parLapply(core.input, 
+          rownames(todo.list), 
+          fun = function(task) {
+                  
+                  # Identify HUC and HFI for the task
+                  hfi <- todo.list[task, "hfi"]
+                  huc <- todo.list[task, "huc"]
+                  
+                  tryCatch(stream_distance(watershed.path = paste0("2_pipeline/huc-6/", hfi, 
+                                                                   "/connectivity/network_", 
+                                                                   huc, ".Rdata")), 
+                           error = function(e) e)
+                  
+          } 
+)
 
 stopCluster(core.input)
 

@@ -5,7 +5,7 @@
 # inputs: ["0_data/external/watersheds/boundary/HUC_8_EPSG3400.dbf";
 #          "network_HUC.Rdata - One for each year and HUC watershed"]
 # outputs: ["network_HUC.Rdata - One for each year and HUC watershed. 
-#           "autocorrelation.distance"]
+#           "autocorrelation-distance.png"]
 # notes: 
 #   "This script assesses the mean distance between each segment and other stream order types."
 # ---
@@ -15,12 +15,11 @@ rm(list=ls())
 gc()
 
 # 1.1 Load libraries and source functions ----
-library(abmi.themes)
 library(foreach)
 library(ggplot2)
 library(igraph)
 library(parallel)
-source("1_code/r-scripts/connectivity-status_functions.R")
+source("1_code/r_scripts/connectivity-status_functions.R")
 
 # 1.2 Define watersheds and analysis year (only required for the most recent inventory) ----
 watershed.ids <- read.dbf("0_data/external/watersheds/boundary/HUC_8_EPSG3400.dbf")
@@ -116,7 +115,7 @@ for (HUC in watershed.ids) {
 
 
 # 2.0 Visualization ----
-
+autocorrelation.distance <- NULL
 for (HUC in watershed.ids) { 
         
         # Load the appropriate Rdata with the culvert information
@@ -132,23 +131,31 @@ autocorrelation.distance <- autocorrelation.distance[!is.na(autocorrelation.dist
 autocorrelation.distance <- as.data.frame(autocorrelation.distance[autocorrelation.distance[, "HabitatType"] == 1, ])
 autocorrelation.distance[, "Kilometres"] <- autocorrelation.distance[, "Distance"] / 1000
 
-png(filename =  paste0("3_output/figures/autocorrelation-distance.png"),
-    width = 1200,
-    height = 800)
 
-print(ggplot(autocorrelation.distance, aes(x=Kilometres)) + 
-              geom_histogram(color = abmi_pal(palette = "main")(2)[1], fill =  abmi_pal(palette = "main")(2)[2], bins = 50) + 
-              geom_vline(aes(xintercept = mean(Kilometres)), color = abmi_pal(palette = "main")(2)[1], linetype = "dashed", size = 1) +
-              scale_x_continuous(breaks = seq(from = 0, to = 800, by = 50)) +
-              scale_fill_identity() +
-              labs(x = "Kilometres", y = "Count") +
-              ggtitle(paste0("Autocorrelation distance = ", round(mean(autocorrelation.distance$Kilometres), 2))) +
-              theme_light() +
-              theme(panel.grid.minor.y = element_blank(),
-          panel.grid.minor.x = element_blank(),
-          panel.grid.major.x = element_blank()))
+correlation.plot <- ggplot(autocorrelation.distance, aes(x=Kilometres)) + 
+        geom_histogram(color = "#000000", fill =  "#a8af8c", bins = 50) + 
+        geom_vline(aes(xintercept = mean(Kilometres)), color = "#000000", linetype = "dashed", size = 1) +
+        scale_x_continuous(breaks = seq(from = 0, to = 800, by = 50)) +
+        scale_fill_identity() +
+        labs(x = "Kilometres", y = "Count") +
+        ggtitle(paste0("Autocorrelation distance = ", round(mean(autocorrelation.distance$Kilometres), 2))) +
+        theme_light() +
+        theme(panel.grid.minor.y = element_blank(),
+              panel.grid.minor.x = element_blank(),
+              panel.grid.major.x = element_blank(), 
+              axis.text.x = element_text(size=18),
+              axis.text.y = element_text(size=18),
+              axis.title.x = element_text(size=18),
+              axis.title.y = element_text(size=18))
 
-dev.off()
+ggsave(filename = "3_output/figures/autocorrelation-distance.jpeg",
+       plot = correlation.plot,
+       height = 800,
+       width = 1200,
+       dpi = 72,
+       quality = 100,
+       units = "px")
+
 
 rm(list=ls())
 gc()

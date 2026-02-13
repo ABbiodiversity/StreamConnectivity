@@ -6,7 +6,7 @@
 # outputs: ["3_output/tables/summaries/connectivity_hfi_[year].Rdata";
 #           "3_output/summaries/shapefiles/connectivity_hfi_[year].shp"]
 # notes: 
-#   "This script generates the final summaries (tables and shapfiles) for the stream connectivity."
+#   "This script generates the final summaries (tables and shapefiles) for the stream connectivity."
 # ---
 
 # 1.0 Initializing environment ----
@@ -23,7 +23,7 @@ boundary.poly <- read_sf("0_data/external/watersheds/boundary/HUC_8_EPSG3400.shp
 watershed.ids <- unique(as.character(boundary.poly$HUC_6))
 boundary.template <- boundary.poly[, c("HUC_8", "HUC_6", "HUC_4", "HUC_2", "geometry")]
 boundary.poly <- boundary.poly
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022)
 huc.scale <- 6
 
 # 2.0 Yearly Summaries ----
