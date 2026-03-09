@@ -27,7 +27,7 @@ gc()
 library(foreach)
 library(foreign)
 library(parallel)
-source("1_code/r-scripts/network-creation_functions.R")
+source("1_code/r_scripts/network-creation_functions.R")
 
 # 1.2 Define the focal years that HFI are available for pro
 hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022) # Define HFI years 
@@ -96,7 +96,7 @@ parLapply(core.input,
                                             dam.layer = paste0(getwd(), "/0_data/external/dams/Alberta_Dams_3400_2021-05-11.shp"), 
                                             mineable.boundary = paste0(getwd(), "/0_data/external/minable/MINEABLE_OIL_SANDS_SCHEME_APPROVALS_MASTER_1.shp"),
                                             Slope = paste0(getwd(), "/0_data/external/topographic/Slope_LiDAR.tif"),
-                                            DEM = paste0(getwd(), "/0_data/external/topographic/ALOS/DEM.tif"), 
+                                            DEM = paste0(getwd(), "/0_data/external/topographic/fab_dem/fab_dem_us_canada.tif"), 
                                             MAP = paste0(getwd(), "/0_data/external/climate/MAP.tif"), 
                                             Eref = paste0(getwd(), "/0_data/external/climate/Eref.tif"),
                                             NR = paste0(getwd(), "/0_data/external/topographic/nsr/Natural_Regions_Subregions_of_Alberta.shp"),

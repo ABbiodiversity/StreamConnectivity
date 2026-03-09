@@ -71,7 +71,7 @@ library(foreach)
 library(foreign)
 library(igraph)
 library(parallel)
-source("1_code/r-scripts/stream-parameters_functions.R")
+source("1_code/r_scripts/stream-parameters_functions.R")
 
 # 2.2 Define the focal years that HFI are available for processing
 hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022)

@@ -339,7 +339,7 @@ gc()
 library(foreach)
 library(foreign)
 library(parallel)
-source("1_code/r-scripts/culvert-passability_functions.R")
+source("1_code/r_scripts/culvert-passability_functions.R")
 
 # 3.3 Define watersheds and analysis years ----
 huc.scale <- 6

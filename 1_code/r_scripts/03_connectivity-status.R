@@ -20,7 +20,7 @@ library(foreach)
 library(foreign)
 library(igraph)
 library(parallel)
-source("1_code/r-scripts/connectivity-status_functions.R")
+source("1_code/r_scripts/connectivity-status_functions.R")
 
 # 1.3 Define scale, region, and years for processing. ----
 watershed.ids <- read.dbf("0_data/external/watersheds/boundary/HUC_8_EPSG3400.dbf")

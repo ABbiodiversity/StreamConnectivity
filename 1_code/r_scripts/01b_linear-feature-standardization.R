@@ -101,7 +101,7 @@ clusterEvalQ(core.input, {
         library(reticulate)
         
         # Set python 
-        use_python(python = "C:/Users/ballen/AppData/Local/r-miniconda/envs/r-reticulate/python.exe")
+        use_python(python = "C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
         
         # Load arcpy
         arcpy <- import('arcpy') 
