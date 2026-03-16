@@ -414,7 +414,7 @@ updated.2022$Difference <- updated.2022$Connect - updated.2010$Connect
 
 connect.diff <- ggplot() + 
         geom_sf(data = updated.2022, aes(color = Difference, fill = Difference), show.legend = TRUE) +
-        scale_fill_gradientn(name = expression(Delta*Connectivity), colors = (met.brewer(name = "Hiroshige", n = 100, type = "continuous")), limits = c(-25,25), guide = "colourbar") +
+        scale_fill_gradientn(name = expression(Delta*Connectivity), colors = c("#e66101", "#fdb863", "#f7f7f7", "#b2abd2", "#5e3c99"), limits = c(-25,25), guide = "colourbar") +
         scale_color_gradientn(colors = "#000000", guide = "none") +
         theme_light() +
         theme(axis.title.x = element_blank(),
