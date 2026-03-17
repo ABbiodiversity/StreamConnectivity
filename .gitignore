@@ -6,6 +6,7 @@
 /data/**
 /bookdown/**
 /results/**
+/src/**
 /0_data/**
 /2_pipeline/**
 /3_output/**
