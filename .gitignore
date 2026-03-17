@@ -3,4 +3,13 @@
 .RData
 .Ruserdata
 /beta/**
+/data/**
 /bookdown/**
+/results/**
+/0_data/**
+/2_pipeline/**
+/3_output/**
+/4_writing/**
+/5_presentations/**
+/6_bookdown/**
+/7_docs/**

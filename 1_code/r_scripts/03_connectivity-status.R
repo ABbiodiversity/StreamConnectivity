@@ -1,49 +1,42 @@
-#
-# Title: Calculating stream connectivity status
-# Created: September 1st, 2021
-# Last Updated: July 19th, 2024
-# Author: Brandon Allen
-# Objectives: Calculating lotic connectivity for individual streams and watersheds
-# Keywords: Notes, Environment initialization, Stream connectivity, Watershed connectivity
-#
+# ---
+# title: "Stream Connectivity Status"
+# author: "Brandon Allen"
+# created: "2025-01-21"
+# inputs: ["network_HUC.Rdata - One for each year and HUC watershed"]
+# outputs: ["network_HUC.Rdata - One for each year and HUC watershed" (Processed Connectivity tables)]
+# notes: 
+#   "Using the available culvert surveys, predicted passability, and network information for each watershed,
+#    calculate regional stream connectivity."
+# ---
 
-#########
-# Notes #
-#########~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#
-# 1) All paths defined in this script are local
-#
-##############################
-# Environment initialization # Last piece is to add the bootstrap predictions (mean plus 90% predictions)
-##############################~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# 1.0 Initializing environment ----
 
-# Clear memory
+# 1.1 Clear memory ----
 rm(list=ls())
 gc()
 
-# Load libraries required scripts
+# 1.2 Load libraries required scripts ----
 library(foreach)
 library(foreign)
 library(igraph)
 library(parallel)
+source("1_code/r_scripts/connectivity-status_functions.R")
 
-source("src/connectivity-status_functions.R")
-
-# Define the watershed lookup table
-watershed.ids <- read.dbf("data/base/gis/watersheds/boundary/HUC_8_EPSG3400.dbf")
+# 1.3 Define scale, region, and years for processing. ----
+watershed.ids <- read.dbf("0_data/external/watersheds/boundary/HUC_8_EPSG3400.dbf")
 watershed.ids <- as.character(unique(watershed.ids$HUC_6)) # Includes all HUC-6 watersheds now
-
-# Define analysis years and watershed scale
-hfi.series <- c(2021)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022)
 huc.scale <- 6
-n.clusters <- 14 # Adjust the number of cores
 
-# Define spatial autocorrelation variable
+# 1.4 Define spatial autocorrelation variable ----
 # Mean distance of first order streams to highest order stream segment
 # HUC 6 - 71000, based on results from 02c_autocorrelation-distance.R
 Autocorrelation.d0 <- 71000 
 
-# Define the cores and objects required for for parallel processing
+# 2.0 Parallel processing of stream connectivity ----
+
+# 2.1 Define the cores and objects required for for parallel processing ----
+n.clusters <- 14 # Adjust the number of cores
 core.input <- makeCluster(n.clusters)
 clusterExport(core.input, c("huc.scale", "watershed.ids", "hfi.series", "Autocorrelation.d0",
                             "network_visualization", "connectivity_wrapper", "watershed_status",
@@ -55,9 +48,7 @@ clusterEvalQ(core.input, {
         
 })
 
-start.time <- Sys.time()
-# Loop through each available HFI inventory
-# Model mean
+# 2.2 Calculate connectivity based on mean culvert predictions ----
 foreach(hfi = hfi.series) %dopar% 
         
         parLapply(core.input, 
@@ -66,12 +57,13 @@ foreach(hfi = hfi.series) %dopar%
                                                                     huc = huc,
                                                                     hfi = hfi,
                                                                     Autocorrelation.d0 = Autocorrelation.d0,
-                                                                    culvert.model = "ModelMean"), 
+                                                                    culvert.model = "ModelMean",
+                                                                    path.in = paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
+                                                                                  hfi, "/connectivity/network_", huc, ".Rdata")), 
                                                error = function(e) e)
         )
 
-# Loop through each available HFI inventory
-# Model Upper
+# 2.3 Calculate connectivity based on upper culvert predictions (upper 90%) ----
 foreach(hfi = hfi.series) %dopar% 
         
         parLapply(core.input, 
@@ -80,12 +72,13 @@ foreach(hfi = hfi.series) %dopar%
                                                                     huc = huc,
                                                                     hfi = hfi,
                                                                     Autocorrelation.d0 = Autocorrelation.d0,
-                                                                    culvert.model = "ModelUpper"), 
+                                                                    culvert.model = "ModelUpper",
+                                                                    path.in = paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
+                                                                                     hfi, "/connectivity/network_", huc, ".Rdata")), 
                                                error = function(e) e)
         )
 
-# Loop through each available HFI inventory
-# Model Lower
+# 2.4 Calculate connectivity based on lower culvert predictions (lower 10%) ----
 foreach(hfi = hfi.series) %dopar% 
         
         parLapply(core.input, 
@@ -94,13 +87,11 @@ foreach(hfi = hfi.series) %dopar%
                                                                     huc = huc,
                                                                     hfi = hfi,
                                                                     Autocorrelation.d0 = Autocorrelation.d0,
-                                                                    culvert.model = "ModelLower"), 
+                                                                    culvert.model = "ModelLower",
+                                                                    path.in = paste0(getwd(), "/2_pipeline/huc-", huc.scale, "/", 
+                                                                                     hfi, "/connectivity/network_", huc, ".Rdata")), 
                                                error = function(e) e)
         )
-
-stopCluster(core.input)
-end.time <- Sys.time()
-end.time - start.time
 
 # Clear memory
 rm(list=ls())
