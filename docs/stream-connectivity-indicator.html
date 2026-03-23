@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+<head>
+
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>3 Stream Connectivity Indicator | Development of the Stream Connectivity indicator for Alberta</title>
+  <meta name="description" content="Technical documentation describing the methodology behind the Stream Connectivity indicator." />
+  <meta name="generator" content="bookdown 0.46 and GitBook 2.6.7" />
+
+  <meta property="og:title" content="3 Stream Connectivity Indicator | Development of the Stream Connectivity indicator for Alberta" />
+  <meta property="og:type" content="book" />
+  
+  <meta property="og:description" content="Technical documentation describing the methodology behind the Stream Connectivity indicator." />
+  
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="3 Stream Connectivity Indicator | Development of the Stream Connectivity indicator for Alberta" />
+  
+  <meta name="twitter:description" content="Technical documentation describing the methodology behind the Stream Connectivity indicator." />
+  
+
+<meta name="author" content="Brandon Allen" />
+
+
+<meta name="date" content="2026-03-23" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  
+  
+<link rel="prev" href="introduction.html"/>
+<link rel="next" href="interpreting-regional-connectivity.html"/>
+<script src="libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@6.4.6/dist/fuse.min.js"></script>
+<link href="libs/gitbook-2.6.7/css/style.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-table.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-bookdown.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-highlight.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-search.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-fontsettings.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-clipboard.css" rel="stylesheet" />
+
+
+
+
+
+
+
+
+<link href="libs/anchor-sections-1.1.0/anchor-sections.css" rel="stylesheet" />
+<link href="libs/anchor-sections-1.1.0/anchor-sections-hash.css" rel="stylesheet" />
+<script src="libs/anchor-sections-1.1.0/anchor-sections.js"></script>
+
+
+
+<style type="text/css">
+  
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+</style>
+<style type="text/css">
+/* Used with Pandoc 2.11+ new --citeproc when CSL is used */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}
+</style>
+
+<link rel="stylesheet" href="style.css" type="text/css" />
+</head>
+
+<body>
+
+
+
+  <div class="book without-animation with-summary font-size-2 font-family-1" data-basepath=".">
+
+    <div class="book-summary">
+      <nav role="navigation">
+
+<ul class="summary">
+<li><a href="./">Stream Connectivity</a></li>
+
+<li class="divider"></li>
+<li class="chapter" data-level="1" data-path="index.html"><a href="index.html"><i class="fa fa-check"></i><b>1</b> Summary</a>
+<ul>
+<li class="chapter" data-level="1.1" data-path="index.html"><a href="index.html#supporting-information"><i class="fa fa-check"></i><b>1.1</b> Supporting Information</a></li>
+<li class="chapter" data-level="1.2" data-path="index.html"><a href="index.html#acknowledgement"><i class="fa fa-check"></i><b>1.2</b> Acknowledgement</a></li>
+<li class="chapter" data-level="1.3" data-path="index.html"><a href="index.html#suggested-citation"><i class="fa fa-check"></i><b>1.3</b> Suggested citation</a></li>
+<li class="chapter" data-level="1.4" data-path="index.html"><a href="index.html#contact"><i class="fa fa-check"></i><b>1.4</b> Contact</a></li>
+</ul></li>
+<li class="chapter" data-level="2" data-path="introduction.html"><a href="introduction.html"><i class="fa fa-check"></i><b>2</b> Introduction</a>
+<ul>
+<li class="chapter" data-level="2.1" data-path="introduction.html"><a href="introduction.html#what-is-stream-connectivity"><i class="fa fa-check"></i><b>2.1</b> What is Stream Connectivity?</a></li>
+<li class="chapter" data-level="2.2" data-path="introduction.html"><a href="introduction.html#how-can-it-be-measured"><i class="fa fa-check"></i><b>2.2</b> How can it be measured?</a></li>
+</ul></li>
+<li class="chapter" data-level="3" data-path="stream-connectivity-indicator.html"><a href="stream-connectivity-indicator.html"><i class="fa fa-check"></i><b>3</b> Stream Connectivity Indicator</a>
+<ul>
+<li class="chapter" data-level="3.1" data-path="stream-connectivity-indicator.html"><a href="stream-connectivity-indicator.html#background"><i class="fa fa-check"></i><b>3.1</b> Background</a></li>
+<li class="chapter" data-level="3.2" data-path="stream-connectivity-indicator.html"><a href="stream-connectivity-indicator.html#identifying-potential-barriers"><i class="fa fa-check"></i><b>3.2</b> Identifying potential barriers</a></li>
+<li class="chapter" data-level="3.3" data-path="stream-connectivity-indicator.html"><a href="stream-connectivity-indicator.html#culvert-passability-model"><i class="fa fa-check"></i><b>3.3</b> Culvert passability model</a></li>
+<li class="chapter" data-level="3.4" data-path="stream-connectivity-indicator.html"><a href="stream-connectivity-indicator.html#stream-connectivity-index"><i class="fa fa-check"></i><b>3.4</b> Stream connectivity index</a></li>
+<li class="chapter" data-level="3.5" data-path="stream-connectivity-indicator.html"><a href="stream-connectivity-indicator.html#dispersal-distances"><i class="fa fa-check"></i><b>3.5</b> Dispersal distances</a></li>
+<li class="chapter" data-level="3.6" data-path="stream-connectivity-indicator.html"><a href="stream-connectivity-indicator.html#limitations"><i class="fa fa-check"></i><b>3.6</b> Limitations</a></li>
+</ul></li>
+<li class="chapter" data-level="4" data-path="interpreting-regional-connectivity.html"><a href="interpreting-regional-connectivity.html"><i class="fa fa-check"></i><b>4</b> Interpreting Regional Connectivity</a></li>
+<li class="chapter" data-level="5" data-path="applications.html"><a href="applications.html"><i class="fa fa-check"></i><b>5</b> Applications</a>
+<ul>
+<li class="chapter" data-level="5.1" data-path="applications.html"><a href="applications.html#tracking-of-indicator-condition"><i class="fa fa-check"></i><b>5.1</b> Tracking of indicator condition</a></li>
+<li class="chapter" data-level="5.2" data-path="applications.html"><a href="applications.html#connectivity-of-individual-stream-segments"><i class="fa fa-check"></i><b>5.2</b> Connectivity of individual stream segments</a></li>
+<li class="chapter" data-level="5.3" data-path="applications.html"><a href="applications.html#culvert-resistance-potential"><i class="fa fa-check"></i><b>5.3</b> Culvert resistance potential</a></li>
+<li class="chapter" data-level="5.4" data-path="applications.html"><a href="applications.html#culvert-prioritization"><i class="fa fa-check"></i><b>5.4</b> Culvert prioritization</a></li>
+</ul></li>
+<li class="chapter" data-level="6" data-path="literature.html"><a href="literature.html"><i class="fa fa-check"></i><b>6</b> Literature</a></li>
+<li class="divider"></li>
+<li><a href="https://github.com/ABbiodiversity" target="blank">Published by ABMI</a></li>
+
+</ul>
+
+      </nav>
+    </div>
+
+    <div class="book-body">
+      <div class="body-inner">
+        <div class="book-header" role="navigation">
+          <h1>
+            <i class="fa fa-circle-o-notch fa-spin"></i><a href="./">Development of the Stream Connectivity indicator for Alberta</a>
+          </h1>
+        </div>
+
+        <div class="page-wrapper" tabindex="-1" role="main">
+          <div class="page-inner">
+
+            <section class="normal" id="section-">
+<div id="stream-connectivity-indicator" class="section level1 hasAnchor" number="3">
+<h1><span class="header-section-number">3</span> Stream Connectivity Indicator<a href="stream-connectivity-indicator.html#stream-connectivity-indicator" class="anchor-section" aria-label="Anchor link to header"></a></h1>
+<div id="background" class="section level2 hasAnchor" number="3.1">
+<h2><span class="header-section-number">3.1</span> Background<a href="stream-connectivity-indicator.html#background" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>For our indicator, we chose to use the Connectivity Status Index proposed by <span class="citation">Diebel et al. (<a href="#ref-Diebel2014">2014</a>)</span>. This is a biological indicator developed to identify patterns of functional connectivity within watersheds. This index provides us with the flexibility to include parameters such as habitat type, quality, and species dispersal limitations, while also incorporating variable resistance values for each barrier on the stream network. To calculate this indicator for all HUC-6 watersheds in Alberta, we required the following information:</p>
+<ul>
+<li>Provincial human footprint inventories of linear features (e.g., roads and rails) across multiple years (2010, 2014, 2016, 2018-2022).</li>
+<li>Provincial stream network (ArcHydro 2).</li>
+<li>Locations of known dams, bridges, stream crossing inspections, and active mining leases.</li>
+</ul>
+</div>
+<div id="identifying-potential-barriers" class="section level2 hasAnchor" number="3.2">
+<h2><span class="header-section-number">3.2</span> Identifying potential barriers<a href="stream-connectivity-indicator.html#identifying-potential-barriers" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>Without a complete inventory of all barriers on the stream network, we need a reliable method to identify where we predict barriers to occur. We assume that all road-stream intersections will have infrastructure installed to allow for the movement of water under the road surface. In addition, all road-stream intersections are treated as culverts unless classified as a bridge (as identified by Alberta Transportation) or dam (as identified by Alberta Environment and Parks). We acknowledge there are GIS errors associated with the location of culvert surveys, bridges, and dam infrastructure. Therefore, we implemented a 50m search radius for aligning other sources of data with the predicted road-stream intersections. As dams do not necessarily occur on road-stream intersections, we used a 50m search radius to the the nearest streamline.</p>
+<p>There are also GIS errors associated with both the ArcHydro2 stream layer and human footprint inventories. These spatial errors may result in an inaccurate representation of all streams and roads, resulting in missing or artificial road-stream intersections. Though we expect improvements in the GIS layers used for this indicator, these types of spatial errors will be present in all GIS based indicators. Therefore, we recommend that ground truth surveys are performed at any location identified for management action based on the stream connectivity indicator, and associated metrics, before remediation actions are implemented.</p>
+<center>
+<div class="float">
+<img src="StreamConnectivity_files/figure-html/figures/intersection-data.jpeg" style="width:80.0%" alt="The locations of all surveyed bridges, dams, watercourse crossings surveys, and active mining region across Alberta, Canada. Watercourse crossing surveys were conducted between 2003 and 2024." />
+<div class="figcaption">The locations of all surveyed bridges, dams, watercourse crossings surveys, and active mining region across Alberta, Canada. Watercourse crossing surveys were conducted between 2003 and 2024.</div>
+</div>
+</center>
+</div>
+<div id="culvert-passability-model" class="section level2 hasAnchor" number="3.3">
+<h2><span class="header-section-number">3.3</span> Culvert passability model<a href="stream-connectivity-indicator.html#culvert-passability-model" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>There have been several projects focused on surveying culverts throughout Alberta in the last two decades. These projects have been wide ranging and include efforts from groups such as Parks Canada, the Alberta Conservation Association, and individual researchers who are interested in understanding how stream connectivity has been impacted across the landscape. However, these data sets are often limited in size due to the challenges associated with surveying culverts, or are restricted to priority areas in Alberta (e.g., national parks, the foothills natural region). With the creation of the Watercourse Crossing Program (WCP) and the Alberta Watercourse Crossing Inventory app (ABWCI), there has been a rapid expansion in the number of culverts being surveyed. This has been achieved due to the accessibility of the app, allowing for both professionals and citizen scientists to survey culverts, and improved collaborations between stakeholders invested in watershed management.</p>
+<p>Using these data sets, we developed a model to predict the probability that a culvert is hanging (0 = complete hang, 1 = no hang) using the boosted-regression tree framework outlined by <span class="citation">Januchowski-Hartley and Mcintrye (<a href="#ref-JanuchowskiHartley2014">2014</a>)</span>. We chose a subset of climatic (climate moisture index), topographic (local slope, topographic position, topographic wetness), stream (confluence bound slope, upstream distance, Strahler order), and watershed characteristics (compactness coefficient, drainage density, basin relief) as predictors of hanging culverts. These variables were chosen due to their relation to soil moisture, local and regional flow, and potential erosion rates. We created a boosted-regression tree using a learning rate of 0.001, a bag fraction rate of 0.5, and a 10-fold cross validation procedure. This model was then run through a simplification procedure to remove redundant variables. The final model used in this indicator had a cross-validation AUC score of ~0.8 and contained the following variables: climate moisture index, local slope, confluence bound slope, upstream distance, basin relief, and drainage density. We applied this model to predict the probability of hanging culverts at all road-stream intersections.</p>
+<p>There are four situations where we purposefully mask the predictions from our hanging culvert model:</p>
+<ul>
+<li>If a culvert survey has been performed at a location, the ground truth value is used. This means that other types of barriers (e.g., garbage, sedimentation, damaged culverts etc) are incorporated into the indicator when survey data is available.</li>
+<li>If a road-stream intersection occurs at a known location of a bridge (as identified by Alberta Transportation), we assume there is no barrier to movement (passability = 1).</li>
+<li>If a road-stream intersection occurs at a known location of a dam (as identified by Alberta Environment and Parks), we assume it is a complete barrier to movement (passability = 0).</li>
+<li>If a road-stream intersection occurs within an active mining lease, we assume it is a complete barrier to movement (passability = 0). This is because water is required to remain within the boundary of active leases and that streams are often removed during mining activity which is not captured by our hydrology layer.</li>
+</ul>
+<center>
+<div class="float">
+<img src="StreamConnectivity_files/figure-html/figures/hanging-culvert-model-comparison.jpeg" style="width:80.0%" alt="The mean passability (blue = 1, red = 0) of all road-stream intersections for each HUC-8 watershed in Alberta based on version 1.0 and version 2.0 of the hanging culvert model." />
+<div class="figcaption">The mean passability (blue = 1, red = 0) of all road-stream intersections for each HUC-8 watershed in Alberta based on version 1.0 and version 2.0 of the hanging culvert model.</div>
+</div>
+</center>
+<p>The intent of this indicator is to focus on the impacts of anthropogenic disturbance. Therefore, we chose to focus on the dominant type of barrier on the landscape (i.e., hanging culverts) when making predictions for road-stream intersections. We acknowledge that there are other types of barriers on the landscape (e.g., waterfalls, sedimentation and garbage blockage, stream removals) and efforts will be made to incorporate them as new resources become available.</p>
+</div>
+<div id="stream-connectivity-index" class="section level2 hasAnchor" number="3.4">
+<h2><span class="header-section-number">3.4</span> Stream connectivity index<a href="stream-connectivity-indicator.html#stream-connectivity-index" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>To estimate Stream connectivity in Alberta at a provincial and regional scale, we modified the indicator defined by <span class="citation">Diebel et al. (<a href="#ref-Diebel2014">2014</a>)</span>. A repository of scripts used to calculate the indicator is available through a <a href="https://github.com/ABbiodiversity/StreamConnectivity">GitHub repository</a>. For details of the connectivity status model, we recommend you read the original paper by <span class="citation">Diebel et al. (<a href="#ref-Diebel2014">2014</a>)</span>.</p>
+<p>The main components of the index for application at a provincial and regional scale are defined as follows (see Table 1 for definitions of the variables used in the index):</p>
+<ol style="list-style-type: decimal">
+<li>Connectivity between segments <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span> under reference condition (no artificial barriers)</li>
+</ol>
+<center>
+<p><span class="math inline">\(A_{jt} = \sum_{i=1}^{n} (S_{i} * \theta_{it} * D_{ij})\)</span></p>
+</center>
+<ol start="2" style="list-style-type: decimal">
+<li>Connectivity between segments <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span> under current conditions (artificial barriers present)</li>
+</ol>
+<center>
+<p><span class="math inline">\(A_{jt} = \sum_{i=1}^{n} (S_{i} * \theta_{it} * P_{ij}^{Art} * D_{ij})\)</span></p>
+</center>
+<ol start="3" style="list-style-type: decimal">
+<li>Inverse distance weighting function between segments <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span></li>
+</ol>
+<center>
+<p><span class="math inline">\(D_{ij} = \frac{1}{1 + \frac{d_{ij}^2}{d_{0}}}\)</span></p>
+</center>
+<ol start="4" style="list-style-type: decimal">
+<li>Overall connectivity of segment <span class="math inline">\(j\)</span></li>
+</ol>
+<center>
+<p><span class="math inline">\(C_{j} = \frac{\sum_{i=1}^{n}\frac{A_{jt}}{A_{jt}^{B}}}{m_j}\)</span></p>
+</center>
+<ol start="5" style="list-style-type: decimal">
+<li>Length-weighted average connectivity using all stream segments within a network</li>
+</ol>
+<center>
+<p><span class="math inline">\(\bar{C} = \frac{\sum_{j=1}^{n} (S_{j} * C_{j})}{\sum_{j=1}^{n} (S_{j})}\)</span></p>
+</center>
+<p>Table 1. Definitions for variables included in the index.</p>
+<table>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Variable</th>
+<th align="left">Definition</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><span class="math inline">\(S_{i}\)</span> / <span class="math inline">\(S_{j}\)</span></td>
+<td align="left">Length of stream segments <span class="math inline">\(i\)</span> / <span class="math inline">\(j\)</span></td>
+</tr>
+<tr class="even">
+<td align="left"><span class="math inline">\(\theta_{it}\)</span></td>
+<td align="left">Proportion of habitat type <span class="math inline">\(t\)</span> in stream segment <span class="math inline">\(i\)</span></td>
+</tr>
+<tr class="odd">
+<td align="left"><span class="math inline">\(D_{ij}\)</span></td>
+<td align="left">Inverse distance weighting function between stream segments <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span></td>
+</tr>
+<tr class="even">
+<td align="left"><span class="math inline">\(P_{ij}^{Art}\)</span></td>
+<td align="left">Cumulative probability of passability between stream segments <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span>, based on culvert passability model predictions</td>
+</tr>
+<tr class="odd">
+<td align="left"><span class="math inline">\(d_{ij}\)</span></td>
+<td align="left">Distance between centroids of segments <span class="math inline">\(i\)</span> and <span class="math inline">\(j\)</span></td>
+</tr>
+<tr class="even">
+<td align="left"><span class="math inline">\(d_{0}\)</span></td>
+<td align="left">Dispersal distance constant</td>
+</tr>
+<tr class="odd">
+<td align="left"><span class="math inline">\(C_{j}\)</span></td>
+<td align="left">Overall connectivity of segment <span class="math inline">\(j\)</span></td>
+</tr>
+<tr class="even">
+<td align="left"><span class="math inline">\(\bar{C}\)</span></td>
+<td align="left">Length-weighted average connectivity</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="dispersal-distances" class="section level2 hasAnchor" number="3.5">
+<h2><span class="header-section-number">3.5</span> Dispersal distances<a href="stream-connectivity-indicator.html#dispersal-distances" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>The connectivity between two stream segments is weighted by the dispersal distance <span class="math inline">\(D_0\)</span> of the focal species of interest. This is meant to reflect the biological differences between species as some may travel large distances throughout a network, while others are restricted to a small home range. However, the goal of this indicator was to be species agnostics. Therefore we developed an appropriate dispersal distance based on a non-biological parameter. For each stream segment, we calculated the minimum distance required to reach the highest order stream reachable within the network (HUC-6). These distances were were then averaged to represent the average distance a species must travel in order to access the main stem of the network. The final value of <span class="math inline">\(D_0\)</span> used for calculating stream connectivity was 71 Km. The code base behind the indicator has the capabilities to incorporate different values of <span class="math inline">\(D_0\)</span> if species specific information is desired.</p>
+<center>
+<div class="float">
+<img src="StreamConnectivity_files/figure-html/figures/autocorrelation-distance.jpeg" style="width:80.0%" alt="Frequency of minimum distances between stream segments and the highest order stream reachable within the stream network. The dashed line represents d0 which equals 71km." />
+<div class="figcaption">Frequency of minimum distances between stream segments and the highest order stream reachable within the stream network. The dashed line represents d0 which equals 71km.</div>
+</div>
+</center>
+</div>
+<div id="limitations" class="section level2 hasAnchor" number="3.6">
+<h2><span class="header-section-number">3.6</span> Limitations<a href="stream-connectivity-indicator.html#limitations" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>As with all indicators, there are limitations that can arise due to how data was collected, the spatial extent of the available data, and assumptions made in creating an index. We have identified the key limitations for this indicator that should be understood when interpreting the results:</p>
+<ol style="list-style-type: decimal">
+<li><p>Habitat quality can be defined using multiple measures depending on the focal species of interest (e.g., water chemistry, stream temperature, and sediment levels). In addition, finding habitat quality information that has a province-wide spatial coverage, and is updated frequently, is challenging. Therefore, we assume habitat quality is 100% for each stream segment. The code base behind the indicator can incorporate different measures of stream habitat quality if data is available within a focal study system.</p></li>
+<li><p>Stream segments can only be assigned a single habitat value (Strahler order or Lake).</p></li>
+<li><p>Though there can be natural barriers to movement both within a stream segment or open waterbody, this indicator only captures the potential impacts to movement due to human footprint.</p></li>
+<li><p>Although there are multiple types of barriers that affect culverts, we have only modelled the probability a culvert is hanging at unsampled road-stream intersections. As uptake of the ABWCI app increases, we expect to be able to model different types of barriers (e.g. sedimentation or debris blockages) and increase the amount of ground truth data incorporated into the indicator.</p></li>
+<li><p>We currently do not incorporate information about the type of road or rail feature (e.g., paved, gravel, multi-lane) incorporated into the culvert passability model.</p></li>
+<li><p>Culverts are inferred based on the intersections between the road and rails inventories with the ArcHydro2 inventory. Stream networks may change over time, and not all roads will have culverts, so some intersections may by misrepresented.</p></li>
+<li><p>Though this indicator is intuitive for understanding directional changes in stream connectivity over time (i.e., increasing or decreasing condition), it can be challenging to understand what a 10% change means, or what resulted in the observed change. This is because the reason for a 10% change can be due to either the blockage/repair of a few key barriers central in the watershed, or the blockage/repair of many barriers that are less central in the network. Therefore, we recommend the results presented here are used to inform where connectivity is changing across the landscape, and supplementary analyses are performed to understand the drivers of that change.</p></li>
+</ol>
+
+</div>
+</div>
+<h3>References</h3>
+<div id="refs" class="references csl-bib-body hanging-indent">
+<div id="ref-Diebel2014" class="csl-entry">
+Diebel, M. W., M. Fedora, S. Cogswell, and J. R O’Hanley. 2014. <span>“Effects of Road Crossings on Habitat Connectivity for Stream-Resident Fish.”</span> <em>River Research and Applications</em> 31. https://doi.org/<a href="https://doi.org/10.1002/rra.2822">https://doi.org/10.1002/rra.2822</a>.
+</div>
+<div id="ref-JanuchowskiHartley2014" class="csl-entry">
+Januchowski-Hartley, Diebel, S. R., and P. B. Mcintrye. 2014. <span>“<a href="">Predicting Road Culvert Passability for Migratory Fishes</a>.”</span> <em>Diversity and Distributions</em> 10.
+</div>
+</div>
+            </section>
+
+          </div>
+        </div>
+      </div>
+<a href="introduction.html" class="navigation navigation-prev " aria-label="Previous page"><i class="fa fa-angle-left"></i></a>
+<a href="interpreting-regional-connectivity.html" class="navigation navigation-next " aria-label="Next page"><i class="fa fa-angle-right"></i></a>
+    </div>
+  </div>
+<script src="libs/gitbook-2.6.7/js/app.min.js"></script>
+<script src="libs/gitbook-2.6.7/js/clipboard.min.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-search.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-sharing.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-fontsettings.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-bookdown.js"></script>
+<script src="libs/gitbook-2.6.7/js/jquery.highlight.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-clipboard.js"></script>
+<script>
+gitbook.require(["gitbook"], function(gitbook) {
+gitbook.start({
+  "sharing": {
+    "github": false,
+    "facebook": true,
+    "twitter": true,
+    "linkedin": false,
+    "weibo": false,
+    "instapaper": false,
+    "vk": false,
+    "whatsapp": false,
+    "all": ["facebook", "twitter", "linkedin", "weibo", "instapaper"]
+  },
+  "fontsettings": {
+    "theme": "white",
+    "family": "sans",
+    "size": 2
+  },
+  "edit": {
+    "link": null,
+    "text": null
+  },
+  "history": {
+    "link": null,
+    "text": null
+  },
+  "view": {
+    "link": null,
+    "text": null
+  },
+  "download": null,
+  "search": {
+    "engine": "fuse",
+    "options": null
+  },
+  "toc": {
+    "collapse": "subsection"
+  }
+});
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    var src = "true";
+    if (src === "" || src === "true") src = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/latest.js?config=TeX-MML-AM_CHTML";
+    if (location.protocol !== "file:")
+      if (/^https?:/.test(src))
+        src = src.replace(/^https?:/, '');
+    script.src = src;
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+</body>
+
+</html>

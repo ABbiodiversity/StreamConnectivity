@@ -1,11 +1,12 @@
 summary
+supporting-information
 acknowledgement
 suggested-citation
 contact
 introduction
-what-is-connectivity
+what-is-stream-connectivity
 how-can-it-be-measured
-measuring-connectivity
+stream-connectivity-indicator
 background
 identifying-potential-barriers
 culvert-passability-model
@@ -14,7 +15,8 @@ dispersal-distances
 limitations
 interpreting-regional-connectivity
 applications
+tracking-of-indicator-condition
+connectivity-of-individual-stream-segments
 culvert-resistance-potential
 culvert-prioritization
-subregional-studies
 literature
