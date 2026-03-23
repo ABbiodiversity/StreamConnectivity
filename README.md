@@ -6,7 +6,7 @@
 
 
 # Stream Connectivity Indicator for Alberta
-> Version 2.0 2026-03-216
+> Version 2.0 2026-03-16
 
 ![Maintenance](https://img.shields.io/badge/Status-Maintenance-green)
 ![Languages](https://img.shields.io/badge/Languages-R%20%7C%20Python-blue)
