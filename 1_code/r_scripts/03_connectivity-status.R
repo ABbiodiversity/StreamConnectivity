@@ -25,7 +25,7 @@ source("1_code/r_scripts/connectivity-status_functions.R")
 # 1.3 Define scale, region, and years for processing. ----
 watershed.ids <- read.dbf("0_data/external/watersheds/boundary/HUC_8_EPSG3400.dbf")
 watershed.ids <- as.character(unique(watershed.ids$HUC_6)) # Includes all HUC-6 watersheds now
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022, 2023)
 huc.scale <- 6
 
 # 1.4 Define spatial autocorrelation variable ----

@@ -23,7 +23,7 @@ boundary.poly <- read_sf("0_data/external/watersheds/boundary/HUC_8_EPSG3400.shp
 watershed.ids <- unique(as.character(boundary.poly$HUC_6))
 boundary.template <- boundary.poly[, c("HUC_8", "HUC_6", "HUC_4", "HUC_2", "geometry")]
 boundary.poly <- boundary.poly
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022, 2023)
 huc.scale <- 6
 
 # 2.0 Yearly Summaries ----

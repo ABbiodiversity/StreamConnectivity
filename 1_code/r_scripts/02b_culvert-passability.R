@@ -343,7 +343,7 @@ source("1_code/r_scripts/culvert-passability_functions.R")
 
 # 3.3 Define watersheds and analysis years ----
 huc.scale <- 6
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022, 2023) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021)
 watershed.ids <- read.dbf("0_data/external/watersheds/boundary/HUC_8_EPSG3400.dbf")
 watershed.ids <- unique(as.character(watershed.ids$HUC_6))
 

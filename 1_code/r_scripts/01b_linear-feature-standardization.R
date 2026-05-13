@@ -2,7 +2,7 @@
 # title: "Linear feature standardization"
 # author: "Brandon Allen"
 # created: "2025-01-11"
-# inputs: ["0_data/external/roadrail-centerlines/2010-2021 HFI centrelines"]
+# inputs: ["0_data/external/roadrail-centerlines/2010-2023 HFI centrelines"]
 # outputs: ["0_data/processed/centerline-network/centerline_hfi.shp"]
 # notes: 
 #   "This script standardizes the roads and rail centreline features available in the ABMI HFI inventories."
@@ -16,17 +16,46 @@ gc()
 library(foreach)
 library(foreign)
 library(parallel)
+library(reticulate)
 source("1_code/r_scripts/linear-features_functions.R")
 
 # 1.2 Define the focal years that HFI are available for processing
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022) 
+# We are ignore 2010 as it requires separate processing and 2023 is our reference year
+hfi.series <- c(2014, 2016, 2018, 2019, 2020, 2021, 2022) 
+
+# Load the hfi lookup
+hfi.lookup <- read.csv("0_data/external/lookup/hfi-path-lookup.csv")
 
 # 2.0 Linear feature standardization ----
 
-# 2.1 Define the cores and objects required for for parallel processing ----
+# 2.1 Define the 2023 Road and Rail centerline classifications
+
+# Set python 
+use_python(python = "C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe")
+arcpy <- import('arcpy') 
+arcpy$env$parallelProcessingFactor <- "100%"
+
+# Define HFI 2023 path
+hfi.2023.path <- hfi.lookup$Path[hfi.lookup$HFI == 2023]
+
+# Merge roads and rails
+arcpy$Merge_management(inputs = paste(paste0(hfi.2023.path, "/o03_Roads_Centerlines_HFI_2023"), 
+                                      paste0(hfi.2023.path, "/o04_Railways_Centerlines_HFI_2023"), sep = ";"), 
+                       output = paste0(getwd(), "/0_data/processed/centerline-network/centerlines_2023_temp.shp"))
+
+# Remove vegetated roads
+arcpy$Select_analysis(in_features = paste0(getwd(), "/0_data/processed/centerline-network/centerlines_2023_temp.shp"), 
+                      out_feature_class = paste0(getwd(), "/0_data/processed/centerline-network/centerlines_2023.shp"), 
+                      where_clause = "FEATURE_TY NOT IN ('Road - Vegetated', 'Road - Vegetated - OSE')")
+
+arcpy$Delete_management(paste0(getwd(), "/0_data/processed/centerline-network/centerlines_2023_temp.shp"))
+
+rm(arcpy)
+
+# 2.2 Define the cores and objects required for for parallel processing ----
 n.clusters <- length(hfi.series)
 core.input <- makeCluster(n.clusters)
-clusterExport(core.input, c("hfi.series", "linearfeature_merging"))
+clusterExport(core.input, c("hfi.series", "linearfeature_standardization", "hfi.lookup"))
 clusterEvalQ(core.input, {
         
         # Load libraries
@@ -47,22 +76,40 @@ clusterEvalQ(core.input, {
         
 })
 
-# 2.2 Merge linear features network ----
+# 2.3 Standardize the linear features networks ----
+# 2010 is handled separately as we are clipping the cleaned 2014 version to the boundaries
+# of HFI 2010 old centrelines (not part of the version 2.0 geodatabase)
 
 parLapply(core.input, 
           as.list(hfi.series), 
-          fun = function(hfi) tryCatch(linearfeature_merging(road.layer = paste0("0_data/external/roadrail-centerlines/", hfi, 
-                                                                                 "/road_centerlines_", hfi, ".shp"),
-                                                             rail.layer = paste0("0_data/external/roadrail-centerlines/", hfi, 
-                                                                                 "/rail_centerlines_", hfi, ".shp"), 
+          fun = function(hfi) tryCatch(linearfeature_standardization(workspace = paste0(getwd(), "/0_data/processed/centerline-network/"),  
                                                              hfi.year = hfi,
-                                                             file.name = "0_data/processed/centerline-network/",
+                                                             hfi.lookup = hfi.lookup,
                                                              arcpy = arcpy), error = function(e) e)
 )
 
 stopCluster(core.input)
 
-# 3.0 Subsetting centrelines and stream network ----
+# Using the approximated 2010 centrelines, clip to the 2014 centerlines that have been standardized
+arcpy <- import('arcpy') 
+arcpy$env$parallelProcessingFactor <- "100%"
+
+# Define HFI 2010 path
+hfi.2010.path <- hfi.lookup$Path[hfi.lookup$HFI == 2010]
+
+# Create the standardized 2010 centerline
+arcpy$Merge_management(inputs = paste(paste0(hfi.2010.path, "/road_centerlines_2010.shp"), 
+                                      paste0(hfi.2010.path, "/rail_centerlines_2010.shp"), sep = ";"), 
+                       output = paste0(getwd(), "/0_data/processed/centerline-network/centerlines_2010_temp.shp"))
+
+arcpy$PairwiseClip_analysis(in_features = "0_data/processed/centerline-network/centerlines_2014.shp", 
+                            clip_features = "0_data/processed/centerline-network/centerlines_2010_temp.shp", 
+                            out_feature_class = "0_data/processed/centerline-network/centerlines_2010.shp")
+
+arcpy$Delete_management(paste0(getwd(), "/0_data/processed/centerline-network/centerlines_2010_temp.shp"))
+rm(arcpy)
+
+# 3.0 Subsetting centrelines and stream network for all years ----
 
 # 3.1 Define HUC scale and valid watershed ids
 huc.scale <- 6
@@ -87,6 +134,7 @@ watershed.ids <- unique(as.character(watershed.ids[, paste0("HUC_", huc.scale)])
 stream.path <- "0_data/processed/stream-network/stream_network_standardized.shp"
 
 # 3.3 Create to-do list for parallel processing ----
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022, 2023) 
 todo.list <- expand.grid(hfi = hfi.series, huc = watershed.ids)
 
 # 3.4 Define the cores and objects required for for parallel processing ----

@@ -362,10 +362,10 @@ ggsave(filename = "3_output/figures/new-culvert-data.jpeg",
        quality = 100,
        units = "px")
 
-# 4.0 Visualizations of 2010 and 2022 results----
+# 4.0 Visualizations of 2010 and 2023 results----
 
 updated.2010 <- read_sf("3_output/shapefiles/summaries/watershed_status_2010.shp")
-updated.2022 <- read_sf("3_output/shapefiles/summaries/watershed_status_2022.shp")
+updated.2023 <- read_sf("3_output/shapefiles/summaries/watershed_status_2023.shp")
 
 connect.2010 <- ggplot() + 
         geom_sf(data = updated.2010, aes(color = Connect, fill = Connect), show.legend = TRUE) +
@@ -385,11 +385,11 @@ connect.2010 <- ggplot() +
               panel.border = element_rect(colour = "black", fill=NA, size=1))
 
 
-connect.2022 <- ggplot() + 
-        geom_sf(data = updated.2022, aes(color = Connect, fill = Connect), show.legend = TRUE) +
+connect.2023 <- ggplot() + 
+        geom_sf(data = updated.2023, aes(color = Connect, fill = Connect), show.legend = TRUE) +
         scale_fill_gradientn(name = paste0("Stream\nConnectivity"), colors = (met.brewer(name = "Hiroshige", n = 100, type = "continuous")), limits = c(0,100), guide = "colourbar") +
         scale_color_gradientn(colors = "#000000", guide = "none") +
-        ggtitle("2022") +
+        ggtitle("2023") +
         theme_light() +
         theme(axis.title.x = element_blank(),
               axis.title.y = element_blank(),
@@ -402,18 +402,18 @@ connect.2022 <- ggplot() +
               axis.line = element_line(colour = "black"),
               panel.border = element_rect(colour = "black", fill=NA, size=1))
 
-ggsave(filename = "3_output/figures/connectivity-summary.jpeg",
-       plot = ggarrange(connect.2010, connect.2022, nrow = 1, ncol = 2),
+ggsave(filename = "3_output/figures/connectivity-summary_2010-2023.jpeg",
+       plot = ggarrange(connect.2010, connect.2023, nrow = 1, ncol = 2),
        height = 800,
        width = 1200,
        dpi = 72,
        quality = 100,
        units = "px")
 
-updated.2022$Difference <- updated.2022$Connect - updated.2010$Connect
+updated.2023$Difference <- updated.2023$Connect - updated.2010$Connect
 
 connect.diff <- ggplot() + 
-        geom_sf(data = updated.2022, aes(color = Difference, fill = Difference), show.legend = TRUE) +
+        geom_sf(data = updated.2023, aes(color = Difference, fill = Difference), show.legend = TRUE) +
         scale_fill_gradientn(name = expression(Delta*Connectivity), colors = c("#e66101", "#fdb863", "#f7f7f7", "#b2abd2", "#5e3c99"), limits = c(-25,25), guide = "colourbar") +
         scale_color_gradientn(colors = "#000000", guide = "none") +
         theme_light() +
@@ -428,7 +428,7 @@ connect.diff <- ggplot() +
               axis.line = element_line(colour = "black"),
               panel.border = element_rect(colour = "black", fill=NA, size=1))
 
-ggsave(filename = "3_output/figures/connectivity-difference.jpeg",
+ggsave(filename = "3_output/figures/connectivity-difference_2010-2023.jpeg",
        plot = connect.diff,
        height = 800,
        width = 600,
@@ -438,7 +438,7 @@ ggsave(filename = "3_output/figures/connectivity-difference.jpeg",
 
 # 5.0 Visualizations of the individual stream scores ----
 # Load a stream layer
-hfi.year <- 2022
+hfi.year <- 2023
 huc.scale <- 6
 HUC <- "040102"
 

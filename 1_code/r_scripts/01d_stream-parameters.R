@@ -16,7 +16,7 @@ rm(list=ls())
 gc()
 
 # 1.2 Define the focal watersheds that need to be repaired ----
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022) # Define HFI years 
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022, 2023) # Define HFI years 
 watershed.id <- c("080304", "040306", "110403", "230101")
 
 # 1.3 Repair each watershed ----
@@ -74,7 +74,7 @@ library(parallel)
 source("1_code/r_scripts/stream-parameters_functions.R")
 
 # 2.2 Define the focal years that HFI are available for processing
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022, 2023) # Define HFI years (2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022, 2023)
 
 # 2.3 Define HUC scale and valid watershed ids
 huc.scale <- 6

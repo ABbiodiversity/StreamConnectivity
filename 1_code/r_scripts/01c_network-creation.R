@@ -29,8 +29,8 @@ library(foreign)
 library(parallel)
 source("1_code/r_scripts/network-creation_functions.R")
 
-# 1.2 Define the focal years that HFI are available for pro
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022) # Define HFI years 
+# 1.2 Define the focal years that HFI are available
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022, 2023) # Define HFI years 
 
 # 1.3 Define HUC scale and valid watershed ids
 huc.scale <- 6

@@ -19,7 +19,7 @@ gc()
 library(sf)
 
 # 1.3 Define parameters ----
-analysis.year <- 2022
+analysis.year <- 2023
 huc.scale <- 6
 watershed.ids <- read_sf("0_data/external/watersheds/boundary/HUC_8_EPSG3400.shp")
 watershed.ids <- as.character(unique(watershed.ids$HUC_6)) 
