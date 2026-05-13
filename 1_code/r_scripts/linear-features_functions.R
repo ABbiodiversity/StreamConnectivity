@@ -5,29 +5,38 @@
 # notes: Define functions that are used for standardizing the linear featuers network
 # ---
 
-#' [Linear Feature Merging]
+#' [Linear Feature Standardization]
 #'
-#' [Creates the merged road and rail network for the defined years.]
+#' [Creates the standardized and merged road and rail network for the defined years.]
 #'
-#' @param [road.layer] [File path for the rail centerlines files.]
-#' @param [rail.layer] [File path for the rail centerlines files.]
 #' @param [hfi.year] [Year of the human footprint inventory.]
-#' @param [file.name] [File name used to define where the standardized stream network is saved.]
+#' @param [hfi.lookup] [Lookup table for paths to HFI geodatabases.]
+#' @param [workspace] [Workspace of the geodatabase storing the cleaned linear features]
 #' @param [arcpy] [arcpy object used for calling ArcPro functions.]
 #' @return [Generates standardize linear features network and saves it to the file.name location.]
 #' 
 
-linearfeature_merging <- function(road.layer, rail.layer, hfi.year, file.name, arcpy) {
+linearfeature_standardization <- function(hfi.year, hfi.lookup, workspace, arcpy) {
         
-        # If the merged roadrail-centerlines exists for the HFI, skip.
-        if (!file.exists(paste0(getwd(), "/", file.name, 
-                                "centerlines_", hfi.year, ".shp"))) {
-                
-                arcpy$Merge_management(inputs = paste(road.layer, rail.layer, sep = ";"), 
-                                       output = paste0(getwd(), "/", file.name, "centerlines_", 
-                                                       hfi.year, ".shp"))
-                
-        }
+        # Select hfi path
+        hfi.path <- hfi.lookup$Path[hfi.lookup$HFI == hfi.year]
+        
+        # Set the geodatabase to the HFI path to identify possible linear features
+        arcpy$env$workspace <- hfi.path
+        
+        # Merge all linear features in the available database
+        candidate.features <- arcpy$ListFeatureClasses()
+        
+        arcpy$Merge_management(inputs = paste(candidate.features, collapse = ";"), 
+                               output = paste0(workspace, "centerlines_temp_", hfi.year, ".shp"))
+        
+        # Clip the two versions
+        arcpy$PairwiseClip_analysis(in_features = paste0(workspace, "centerlines_2023.shp"), 
+                                    clip_features = paste0(workspace, "centerlines_temp_", hfi.year, ".shp"), 
+                                    out_feature_class = paste0(workspace, "centerlines_", hfi.year, ".shp"))
+        
+        # Remove the temporary version
+        arcpy$Delete_management(in_data = paste0(workspace, "centerlines_temp_", hfi.year, ".shp"))
         
 }
 
