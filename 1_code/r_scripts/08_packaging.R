@@ -29,11 +29,11 @@ arcpy$env$parallelProcessingFactor <- "100%"
 
 # 1.3 Define output file name ----
 arcpy$CreateFileGDB_management(out_folder_path = paste0(getwd(), "/3_output/shapefiles/geodiscover/"), 
-                               out_name = "stream_connectivity_2010-2022.gdb")
+                               out_name = "stream_connectivity_2010-2023.gdb")
 
 
 # 1.3 Define parameters ----
-hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022)
+hfi.series <- c(2010, 2014, 2016, 2018, 2019, 2020, 2021, 2022, 2023)
 
 # 2.0 Yearly Summaries ----
 for (year in hfi.series) {
@@ -59,7 +59,7 @@ for (year in hfi.series) {
 
 
 write_sf(watershed.results, 
-         dsn = paste0(getwd(), "/3_output/shapefiles/geodiscover/stream_connectivity_2010-2022.gdb"),
+         dsn = paste0(getwd(), "/3_output/shapefiles/geodiscover/stream_connectivity_2010-2023.gdb"),
          layer = "Stream_Connectivity")
 
 rm(list=ls())
